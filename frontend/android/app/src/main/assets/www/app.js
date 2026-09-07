@@ -9,7 +9,7 @@ function getInitialApiBase() {
   const saved = localStorage.getItem('solwash_api_url');
   if (saved) return saved.trim().replace(/\/$/, '');
 
-  return 'https://solwash-hpnn.onrender.com/api';
+  return 'http://localhost:5000/api';
 }
 
 let API_BASE = getInitialApiBase();
@@ -1321,8 +1321,8 @@ function setupOtpAuthentication() {
   const googleBtn = document.getElementById('googleDirectLoginBtn');
   const phoneBtn = document.getElementById('phoneDirectLoginBtn');
 
-  // Official Google Client ID provided by user
-  const GOOGLE_CLIENT_ID = "859731657038-cp7dv93nj8l6k9flueoph7rjntelhu63.apps.googleusercontent.com";
+  // Google Client ID (Optional)
+  const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "";
 
   // Listen for popup OAuth messages
   window.addEventListener('message', (event) => {

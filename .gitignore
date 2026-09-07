@@ -18,3 +18,9 @@ backend/src/data/*.db-journal
 # OS files
 .DS_Store
 Thumbs.db
+
+# Mobile and Build artifacts
+*.apk
+.gradle/
+**/build/
+

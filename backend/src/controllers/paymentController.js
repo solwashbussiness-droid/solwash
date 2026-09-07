@@ -2,6 +2,7 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const env = require('../config/env');
 const { db } = require('../database/db');
+const { sendOrderInvoiceEmail } = require('../services/emailService');
 
 // Initialize Razorpay SDK instance
 let razorpayInstance = null;
@@ -129,9 +130,19 @@ exports.verifyPayment = async (req, res) => {
     );
 
     const updatedOrder = await db.getAsync(
-      'SELECT * FROM orders WHERE id = ? OR order_number = ?',
+      `SELECT o.*, s.title as service_title, u.name as customer_name, u.phone as customer_phone, u.email as customer_email
+       FROM orders o
+       LEFT JOIN services s ON o.service_id = s.id
+       LEFT JOIN users u ON o.user_id = u.id
+       WHERE o.id = ? OR o.order_number = ?`,
       [order_id, order_id]
     );
+
+    if (updatedOrder) {
+      db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [updatedOrder.id]).then(items => {
+        sendOrderInvoiceEmail(updatedOrder, 'confirmed', items).catch(e => console.error('[Email] Payment confirmed err:', e.message));
+      });
+    }
 
     return res.json({
       success: true,

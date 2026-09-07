@@ -33,6 +33,83 @@ let currentOrderFilter = 'all';
 let allServices = [];
 let currentServiceCategory = 'all';
 
+// Floating Toast Notification for Admin Portal
+function showAdminToast(message, type = 'info', duration = 3500) {
+  let container = document.getElementById('adminToastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'adminToastContainer';
+    container.className = 'admin-toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `admin-toast ${type}`;
+  
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✓';
+  else if (type === 'error') icon = '⚠️';
+  else if (type === 'warning') icon = '🔔';
+
+  toast.innerHTML = `<span style="font-size:16px;">${icon}</span><span style="flex:1;">${message}</span>`;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(50px)';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+function handleAdminSessionExpired() {
+  localStorage.removeItem('solwash_admin_token');
+  localStorage.removeItem('solwash_admin_user');
+  authToken = '';
+  currentUser = null;
+  showAuthModal();
+  showAdminToast('Session expired. Please sign in again.', 'warning');
+}
+
+// Centralized safe admin fetch helper
+async function adminApiFetch(url, options = {}) {
+  const headers = {
+    'Authorization': `Bearer ${authToken}`,
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+
+  let res;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch (netErr) {
+    throw new Error(`Unable to connect to server at ${API_BASE}. Please ensure backend is running.`);
+  }
+
+  if (res.status === 401) {
+    handleAdminSessionExpired();
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  let data;
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      throw new Error('Invalid JSON response from server.');
+    }
+  } else {
+    const text = await res.text();
+    data = { success: res.ok, message: text || res.statusText };
+  }
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || `Request failed with status ${res.status}`);
+  }
+
+  return data;
+}
+
 // DOM Elements
 const authModal = document.getElementById('authModal');
 const loginForm = document.getElementById('loginForm');
@@ -227,23 +304,20 @@ let servicesPieChartInstance = null;
 // Load Overview Metrics & Recent Orders
 async function fetchOverviewData() {
   try {
-    const res = await fetch(`${API_BASE}/admin/stats`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-    const result = await res.json();
+    const result = await adminApiFetch(`${API_BASE}/admin/stats`, { method: 'GET' });
+    const data = result.data || {};
+    statCustomers.textContent = data.total_customers || 0;
+    statOrders.textContent = data.total_orders || 0;
+    statActive.textContent = data.active_orders || 0;
+    statRevenue.textContent = `₹${(data.revenue || 0).toLocaleString('en-IN')}`;
 
-    if (res.ok && result.success) {
-      const data = result.data;
-      statCustomers.textContent = data.total_customers || 0;
-      statOrders.textContent = data.total_orders || 0;
-      statActive.textContent = data.active_orders || 0;
-      statRevenue.textContent = `₹${(data.revenue || 0).toLocaleString('en-IN')}`;
-
-      renderCharts(data);
-      renderRecentOrders(data.recent_orders || []);
-    }
+    renderCharts(data);
+    renderRecentOrders(data.recent_orders || []);
   } catch (err) {
     console.error('Failed to load overview data:', err);
+    if (!err.message.includes('Session expired')) {
+      showAdminToast(`Failed to load metrics: ${err.message}`, 'error');
+    }
   }
 }
 
@@ -434,22 +508,24 @@ function renderRecentOrders(orders) {
 // Load Customers for Users Tab
 async function fetchUsersData() {
   try {
-    const res = await fetch(`${API_BASE}/admin/customers`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-    const result = await res.json();
-
-    if (res.ok && result.success) {
-      allCustomers = result.data || [];
-      renderUsersTable('');
-    }
+    const result = await adminApiFetch(`${API_BASE}/admin/customers`, { method: 'GET' });
+    allCustomers = result.data || [];
+    renderUsersTable('');
   } catch (err) {
     console.error('Failed to load users:', err);
-    usersTableBody.innerHTML = `
-      <tr>
-        <td colspan="7" class="empty-state">Error loading users. Please verify backend connection.</td>
-      </tr>
-    `;
+    if (usersTableBody) {
+      usersTableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="empty-state" style="padding: 28px 16px; color: #ef4444;">
+            <div style="font-weight: 600; margin-bottom: 6px;">⚠️ ${err.message}</div>
+            <button type="button" onclick="fetchUsersData()" style="background: #1e40af; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;">🔄 Retry Loading Customers</button>
+          </td>
+        </tr>
+      `;
+    }
+    if (!err.message.includes('Session expired')) {
+      showAdminToast(`Failed to load customers: ${err.message}`, 'error');
+    }
   }
 }
 
@@ -512,28 +588,14 @@ async function handleDeleteUser(userId, userName) {
   if (!confirmDelete) return;
 
   try {
-    const res = await fetch(`${API_BASE}/admin/customers/${userId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const result = await res.json();
-    if (res.ok && result.success) {
-      alert(`User ${userName} was deleted successfully.`);
-      // Remove from state
-      allCustomers = allCustomers.filter(u => u.id !== userId);
-      const query = userSearchInput ? userSearchInput.value.toLowerCase().trim() : '';
-      renderUsersTable(query);
-      // Also refresh overview stats
-      fetchOverviewData();
-    } else {
-      alert(`Failed to delete user: ${result.message || 'Unknown error'}`);
-    }
+    await adminApiFetch(`${API_BASE}/admin/customers/${userId}`, { method: 'DELETE' });
+    showAdminToast(`✓ User "${userName}" was deleted successfully.`, 'success');
+    allCustomers = allCustomers.filter(u => u.id !== userId);
+    const query = userSearchInput ? userSearchInput.value.toLowerCase().trim() : '';
+    renderUsersTable(query);
+    fetchOverviewData();
   } catch (err) {
-    alert(`Error deleting user: ${err.message}`);
+    showAdminToast(`Failed to delete user: ${err.message}`, 'error');
   }
 }
 
@@ -544,7 +606,7 @@ function setupExportUsers() {
 
   exportBtn.addEventListener('click', () => {
     if (!allCustomers || allCustomers.length === 0) {
-      alert('No user data available to export.');
+      showAdminToast('No user data available to export.', 'warning');
       return;
     }
 
@@ -648,26 +710,24 @@ function setupOrders() {
 async function fetchOrdersData() {
   const ordersTableBody = document.getElementById('ordersTableBody');
   try {
-    const res = await fetch(`${API_BASE}/orders`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-    const result = await res.json();
-
-    if (res.ok && result.success) {
-      allOrders = result.data || [];
-      updateOrderCounts();
-      renderOrdersTable();
-    } else {
-      throw new Error(result.message || 'Failed to fetch orders');
-    }
+    const result = await adminApiFetch(`${API_BASE}/orders`, { method: 'GET' });
+    allOrders = result.data || [];
+    updateOrderCounts();
+    renderOrdersTable();
   } catch (err) {
     console.error('Failed to load orders:', err);
     if (ordersTableBody) {
       ordersTableBody.innerHTML = `
         <tr>
-          <td colspan="8" class="empty-state">Failed to load orders. Please ensure backend is running.</td>
+          <td colspan="8" class="empty-state" style="padding: 28px 16px; color: #ef4444;">
+            <div style="font-weight: 600; margin-bottom: 6px;">⚠️ ${err.message}</div>
+            <button type="button" onclick="fetchOrdersData()" style="background: #1e40af; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;">🔄 Retry Loading Orders</button>
+          </td>
         </tr>
       `;
+    }
+    if (!err.message.includes('Session expired')) {
+      showAdminToast(`Failed to load orders: ${err.message}`, 'error');
     }
   }
 }
@@ -797,38 +857,29 @@ function renderOrdersTable(query = '') {
 // Update order status on backend
 async function handleUpdateOrderStatus(orderId, newStatus) {
   try {
-    // If marking delivered, automatically mark payment paid as well
     const payload = { status: newStatus };
     if (newStatus === 'delivered') {
       payload.payment_status = 'paid';
     }
 
-    const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
+    const result = await adminApiFetch(`${API_BASE}/orders/${orderId}/status`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(payload)
     });
 
-    const result = await res.json();
-    if (res.ok && result.success) {
-      // Update local state
-      const idx = allOrders.findIndex(o => o.id === orderId);
-      if (idx !== -1) {
-        allOrders[idx] = { ...allOrders[idx], ...result.data };
-      }
-      updateOrderCounts();
-      const orderSearchInput = document.getElementById('orderSearchInput');
-      const query = orderSearchInput ? orderSearchInput.value.toLowerCase().trim() : '';
-      renderOrdersTable(query);
-      fetchOverviewData(); // Sync overview graph and metrics
-    } else {
-      alert(`Failed to update status: ${result.message || 'Error'}`);
+    // Update local state
+    const idx = allOrders.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      allOrders[idx] = { ...allOrders[idx], ...result.data };
     }
+    updateOrderCounts();
+    const orderSearchInput = document.getElementById('orderSearchInput');
+    const query = orderSearchInput ? orderSearchInput.value.toLowerCase().trim() : '';
+    renderOrdersTable(query);
+    fetchOverviewData();
+    showAdminToast(`✓ Order #${orderId} status updated to "${newStatus.toUpperCase()}".`, 'success');
   } catch (err) {
-    alert(`Error updating order status: ${err.message}`);
+    showAdminToast(`Failed to update status: ${err.message}`, 'error');
   }
 }
 
@@ -838,27 +889,16 @@ async function handleDeleteOrder(orderId, orderNumber) {
   if (!confirmDelete) return;
 
   try {
-    const res = await fetch(`${API_BASE}/orders/${orderId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const result = await res.json();
-    if (res.ok && result.success) {
-      allOrders = allOrders.filter(o => o.id !== orderId);
-      updateOrderCounts();
-      const orderSearchInput = document.getElementById('orderSearchInput');
-      const query = orderSearchInput ? orderSearchInput.value.toLowerCase().trim() : '';
-      renderOrdersTable(query);
-      fetchOverviewData(); // Sync overview metrics and chart
-    } else {
-      alert(`Failed to delete order: ${result.message || 'Error occurred'}`);
-    }
+    await adminApiFetch(`${API_BASE}/orders/${orderId}`, { method: 'DELETE' });
+    allOrders = allOrders.filter(o => o.id !== orderId);
+    updateOrderCounts();
+    const orderSearchInput = document.getElementById('orderSearchInput');
+    const query = orderSearchInput ? orderSearchInput.value.toLowerCase().trim() : '';
+    renderOrdersTable(query);
+    fetchOverviewData();
+    showAdminToast(`✓ Order #${orderNumber} deleted successfully.`, 'success');
   } catch (err) {
-    alert(`Error deleting order: ${err.message}`);
+    showAdminToast(`Failed to delete order: ${err.message}`, 'error');
   }
 }
 
@@ -1064,27 +1104,21 @@ async function handleSaveService(e) {
   if (saveBtn) saveBtn.disabled = true;
 
   try {
-    const res = await fetch(url, {
+    await adminApiFetch(url, {
       method: method,
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(payload)
     });
 
-    const result = await res.json();
-    if (!res.ok || !result.success) {
-      throw new Error(result.message || 'Failed to save service.');
-    }
-
     closeServiceModal();
     await fetchServicesData();
-    fetchOverviewData(); // Sync overview charts
+    fetchOverviewData();
+    showAdminToast(isEdit ? '✓ Solar service updated successfully.' : '✓ Solar service created successfully.', 'success');
   } catch (err) {
     if (errorDiv) {
       errorDiv.textContent = err.message;
       errorDiv.style.display = 'block';
+    } else {
+      showAdminToast(err.message, 'error');
     }
   } finally {
     if (saveBtn) saveBtn.disabled = false;
@@ -1097,85 +1131,64 @@ async function handleDeleteService(serviceId, serviceTitle) {
   if (!confirmDelete) return;
 
   try {
-    const res = await fetch(`${API_BASE}/services/${serviceId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const result = await res.json();
-    if (res.ok && result.success) {
-      allServices = allServices.filter(s => s.id !== serviceId);
-      updateServiceCounts();
-      const searchInput = document.getElementById('serviceSearchInput');
-      const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-      renderServicesTable(query);
-      fetchOverviewData();
-    } else {
-      alert(`Failed to delete service: ${result.message || 'Error occurred'}`);
-    }
+    await adminApiFetch(`${API_BASE}/services/${serviceId}`, { method: 'DELETE' });
+    allServices = allServices.filter(s => s.id !== serviceId);
+    updateServiceCounts();
+    const searchInput = document.getElementById('serviceSearchInput');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    renderServicesTable(query);
+    fetchOverviewData();
+    showAdminToast(`✓ Service "${serviceTitle}" deleted successfully.`, 'success');
   } catch (err) {
-    alert(`Error removing service: ${err.message}`);
+    showAdminToast(`Failed to delete service: ${err.message}`, 'error');
   }
 }
 
 async function handleToggleServiceStatus(serviceId, currentActive) {
   const newActive = currentActive === 1 ? 0 : 1;
   try {
-    const res = await fetch(`${API_BASE}/services/${serviceId}`, {
+    await adminApiFetch(`${API_BASE}/services/${serviceId}`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify({ is_active: newActive })
     });
 
-    const result = await res.json();
-    if (res.ok && result.success) {
-      const idx = allServices.findIndex(s => s.id === serviceId);
-      if (idx !== -1) {
-        allServices[idx].is_active = newActive;
-      }
-      updateServiceCounts();
-      const searchInput = document.getElementById('serviceSearchInput');
-      const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-      renderServicesTable(query);
-    } else {
-      alert(`Failed to toggle status: ${result.message || 'Error'}`);
+    const idx = allServices.findIndex(s => s.id === serviceId);
+    if (idx !== -1) {
+      allServices[idx].is_active = newActive;
     }
+    updateServiceCounts();
+    const searchInput = document.getElementById('serviceSearchInput');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    renderServicesTable(query);
+    showAdminToast(`✓ Service visibility set to ${newActive === 1 ? 'ACTIVE' : 'INACTIVE'}.`, 'info');
   } catch (err) {
-    alert(`Error updating service status: ${err.message}`);
+    showAdminToast(`Failed to toggle status: ${err.message}`, 'error');
   }
 }
 
 async function fetchServicesData() {
   const tableBody = document.getElementById('servicesTableBody');
   try {
-    const res = await fetch(`${API_BASE}/services/admin/all`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-
-    const result = await res.json();
-    if (res.ok && result.success) {
-      allServices = result.data || [];
-      updateServiceCounts();
-      const searchInput = document.getElementById('serviceSearchInput');
-      const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
-      renderServicesTable(query);
-    } else {
-      throw new Error(result.message || 'Failed to fetch services');
-    }
+    const result = await adminApiFetch(`${API_BASE}/services/admin/all`, { method: 'GET' });
+    allServices = result.data || [];
+    updateServiceCounts();
+    const searchInput = document.getElementById('serviceSearchInput');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    renderServicesTable(query);
   } catch (err) {
     console.error('Failed to load services:', err);
     if (tableBody) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="7" class="empty-state">Failed to load services. Please check backend connection.</td>
+          <td colspan="7" class="empty-state" style="padding: 28px 16px; color: #ef4444;">
+            <div style="font-weight: 600; margin-bottom: 6px;">⚠️ ${err.message}</div>
+            <button type="button" onclick="fetchServicesData()" style="background: #1e40af; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;">🔄 Retry Loading Services</button>
+          </td>
         </tr>
       `;
+    }
+    if (!err.message.includes('Session expired')) {
+      showAdminToast(`Failed to load services: ${err.message}`, 'error');
     }
   }
 }

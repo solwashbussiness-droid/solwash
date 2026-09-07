@@ -21,7 +21,7 @@ class LoginActivity : AppCompatActivity() {
     
     // Use 10.0.2.2 for Android Emulator to connect to host localhost:5000
     // Or use your actual local machine IP address for physical devices
-    private val BASE_URL = "https://solwash-backend-8b5e.onrender.com/api"
+    private val BASE_URL = "http://10.0.2.2:5000/api"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

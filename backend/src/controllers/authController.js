@@ -22,12 +22,13 @@ const sendOtpEmail = async (email, otp) => {
   }
 
   try {
+    const smtpPass = (env.SMTP.pass || '').replace(/\s+/g, '');
     const transportOptions = (env.SMTP.host && env.SMTP.host.includes('gmail')) || env.SMTP.user.endsWith('@gmail.com')
       ? {
           service: 'gmail',
           auth: {
             user: env.SMTP.user,
-            pass: env.SMTP.pass
+            pass: smtpPass
           }
         }
       : {

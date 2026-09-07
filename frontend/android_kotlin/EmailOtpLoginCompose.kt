@@ -119,7 +119,7 @@ fun EmailOtpLoginScreen(
                             isLoading = true
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
-                                    val url = URL("https://solwash-backend-8b5e.onrender.com/api/auth/send-otp")
+                                    val url = URL("http://10.0.2.2:5000/api/auth/send-otp")
                                     val conn = (url.openConnection() as HttpURLConnection).apply {
                                         requestMethod = "POST"
                                         setRequestProperty("Content-Type", "application/json")
@@ -192,7 +192,7 @@ fun EmailOtpLoginScreen(
                             isLoading = true
                             coroutineScope.launch(Dispatchers.IO) {
                                 try {
-                                    val url = URL("https://solwash-backend-8b5e.onrender.com/api/auth/verify-otp")
+                                    val url = URL("http://10.0.2.2:5000/api/auth/verify-otp")
                                     val conn = (url.openConnection() as HttpURLConnection).apply {
                                         requestMethod = "POST"
                                         setRequestProperty("Content-Type", "application/json")

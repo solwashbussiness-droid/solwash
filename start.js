@@ -46,7 +46,11 @@ for (const svc of services) {
 
 const children = [];
 
+let isExiting = false;
+
 function cleanExit() {
+  if (isExiting) return;
+  isExiting = true;
   for (const child of children) {
     try {
       child.kill('SIGTERM');
@@ -57,7 +61,7 @@ function cleanExit() {
 
 process.on('SIGINT', cleanExit);
 process.on('SIGTERM', cleanExit);
-process.on('exit', cleanExit);
+process.on('SIGHUP', cleanExit);
 
 console.log('=============================================');
 console.log('🚀 Starting SolWash Services...');

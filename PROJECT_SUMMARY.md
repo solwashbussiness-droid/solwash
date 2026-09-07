@@ -1,54 +1,43 @@
-# SolWash - Project Summary & Quick Reference
+# SolWash - Local Development Guide & Reference
 
-> Saved Conversation Reference: Whenever you return and type **`solwash`**, this document serves as the complete snapshot of all progress, deployments, credentials, and download links.
-
----
-
-## 1. Live Cloud Deployments (Render)
-- **Backend API:** [https://solwash-backend-8b5e.onrender.com](https://solwash-backend-8b5e.onrender.com)
-  - Health Check: `https://solwash-backend-8b5e.onrender.com/api/health`
-- **Admin Panel:** [https://solwash-admin-8b5e.onrender.com](https://solwash-admin-8b5e.onrender.com)
-  - Default Admin Username: `admin` (or `admin@solwash.com`)
-  - Default Admin Password: `admin` (or `Admin@123456`)
+SolWash is a complete solar panel cleaning & maintenance platform configured to run 100% locally.
 
 ---
 
-## 2. GitHub Repository
-- **Repository URL:** [https://github.com/Aryan7251/solwash](https://github.com/Aryan7251/solwash)
-- **Branch:** `main`
-- **CI/CD:** Automated GitHub Actions APK build workflow (`.github/workflows/build-apk.yml`)
+## 1. Local Services Architecture
+
+When running locally, three services are started concurrently:
+- **Backend REST API:** [http://localhost:5000](http://localhost:5000)
+  - Health Check: `http://localhost:5000/api/health`
+  - API Base: `http://localhost:5000/api`
+  - Built-in SQLite Database (`./backend/src/data/solwash.db`)
+- **Admin Management Panel:** [http://localhost:3000](http://localhost:3000)
+  - Default Admin Email: `admin@solwash.com` (or username `admin`)
+  - Default Admin Password: `Admin@123456` (or `admin`)
+- **Mobile Web App Preview:** [http://localhost:3001](http://localhost:3001)
+  - Customer interface for booking cleaning services, tracking orders, and viewing pricing.
 
 ---
 
-## 3. Android App (APK)
-- **Direct Phone Download:** [Download SolWash.apk (v1.0.0)](https://github.com/Aryan7251/solwash/releases/download/v1.0.0/SolWash.apk)
-- **GitHub Release Page:** [https://github.com/Aryan7251/solwash/releases/tag/v1.0.0](https://github.com/Aryan7251/solwash/releases/tag/v1.0.0)
-- **Local Desktop File:** `/home/linux/Desktop/SolWash.apk`
-- **Features Included:**
-  - Custom launcher icons generated across all standard densities (`mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`).
-  - Seamless integration with the live Render backend.
-  - Full booking, exploration, order tracking, and profile management capabilities.
+## 2. Running Locally
 
----
-
-## 4. Local Development
-To run services on your local machine:
+To start all services together:
 ```bash
 cd /home/linux/Desktop/solwash
-./start.sh   # Starts Backend (5000), Admin Panel (3000), and Mobile Web Preview (3001)
-./stop.sh    # Stops all services
+./start.sh
+# or
+npm start
+```
+
+To stop all background services:
+```bash
+./stop.sh
 ```
 
 ---
 
-## 5. Summary of Recent Improvements
-1. **Banner "Book Cleaning" Button:**
-   - Clicking "Book Cleaning" on the home top banner opens the **"Select Solar Service"** panel with automatic top scrolling.
-2. **Backend & Admin Panel Render Deployment:**
-   - Render Blueprint `render.yaml` created.
-   - Dynamic API base routing implemented.
-   - SQLite DB resolution and automatic solar services seeders configured.
-3. **App Logo & APK Packaging:**
-   - Converted the custom logo image into native Android mipmap launcher icons.
-   - Built the complete Android application (`assembleDebug`) via Gradle 8.5 & Java 17.
-   - Released and uploaded the APK to GitHub releases.
+## 3. Local Authentication & Payment Features
+
+- **Instant Phone Login:** Enter any 10-digit mobile number on localhost to test customer sessions immediately.
+- **Email OTP Login:** Generates OTP directly visible in the backend console (`🔑 [SOLWASH OTP] Code: xxxxxx`) for effortless local verification without needing external SMTP servers.
+- **Sandbox Payments:** Built-in test sandbox allows instant payment simulation without requiring external payment gateways.

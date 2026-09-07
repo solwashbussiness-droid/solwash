@@ -427,6 +427,44 @@
     </div>
   </div>
 
+  <!-- ORDER SUCCESS POPUP MODAL -->
+  <div id="orderSuccessModal" class="modal-overlay hidden" style="z-index: 1200;">
+    <div class="modal-card" style="text-align: center; max-width: 380px; padding: 28px 22px; border-radius: 20px;">
+      <div style="width: 76px; height: 76px; margin: 0 auto 16px; background: #ecfdf5; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #a7f3d0;">
+        <svg viewBox="0 0 24 24" width="42" height="42" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      </div>
+
+      <h3 style="font-size: 20px; color: #0f172a; margin-bottom: 8px; font-weight: 800;">Order Successful!</h3>
+      
+      <p style="font-size: 14px; color: #334155; line-height: 1.5; margin-bottom: 18px; font-weight: 500;">
+        Thank you for booking with SolWash!<br>
+        <span style="color: #0284c7; font-weight: 600;">Our agent will contact you shortly</span> to confirm your slot and details.
+      </p>
+
+      <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: left; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #64748b;">Order Number:</span>
+          <strong id="successOrderNum" style="color: #0f172a; font-family: monospace;">-</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #64748b;">Amount:</span>
+          <strong id="successOrderAmount" style="color: #0f172a;">-</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #64748b;">Payment Mode:</span>
+          <span id="successOrderMode" style="font-weight: 600; text-transform: capitalize; color: #059669;">-</span>
+        </div>
+      </div>
+
+      <button type="button" id="closeSuccessModalBtn" class="btn-golden full-btn" style="height: 46px; font-size: 15px; font-weight: 700; border-radius: 10px;">
+        <span>View My Bookings</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Mobile Login Modal -->
   <div id="loginModal" class="modal-overlay hidden">
     <div class="modal-card">

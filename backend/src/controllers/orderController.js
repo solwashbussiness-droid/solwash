@@ -1,4 +1,6 @@
 const { db } = require('../database/db');
+const { sendOrderNotification } = require('../services/telegramService');
+const { sendOrderInvoiceEmail } = require('../services/emailService');
 
 // Helper to generate readable order number
 const generateOrderNumber = () => {
@@ -103,7 +105,7 @@ exports.createOrder = async (req, res) => {
     }
 
     const order = await db.getAsync(
-      `SELECT o.*, s.title as service_title, u.name as customer_name,
+      `SELECT o.*, s.title as service_title, u.name as customer_name, u.email as customer_email,
               COALESCE(o.customer_phone, u.phone) as customer_phone
        FROM orders o
        LEFT JOIN services s ON o.service_id = s.id
@@ -113,6 +115,16 @@ exports.createOrder = async (req, res) => {
     );
 
     const orderItems = await db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
+
+    // Dispatch Telegram notification in background without blocking response
+    sendOrderNotification(order, orderItems).catch(err => {
+      console.error('[Telegram] Background dispatch failed:', err.message);
+    });
+
+    // Dispatch Email Invoice (Initiated) in background
+    sendOrderInvoiceEmail(order, 'initiated', orderItems).catch(err => {
+      console.error('[Email] Background dispatch failed:', err.message);
+    });
 
     return res.status(201).json({
       success: true,
@@ -268,13 +280,26 @@ exports.updateOrderStatus = async (req, res) => {
     );
 
     const updated = await db.getAsync(
-      `SELECT o.*, s.title as service_title, u.name as customer_name, u.phone as customer_phone
+      `SELECT o.*, s.title as service_title, u.name as customer_name, u.phone as customer_phone, u.email as customer_email
        FROM orders o
        LEFT JOIN services s ON o.service_id = s.id
        LEFT JOIN users u ON o.user_id = u.id
        WHERE o.id = ?`,
       [id]
     );
+
+    // If status changed to confirmed or cancelled, trigger relevant email invoice
+    if (status && status !== existing.status) {
+      if (status === 'confirmed') {
+        db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
+          sendOrderInvoiceEmail(updated, 'confirmed', items).catch(e => console.error('[Email] Confirmed err:', e.message));
+        });
+      } else if (status === 'cancelled') {
+        db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
+          sendOrderInvoiceEmail(updated, 'failed', items).catch(e => console.error('[Email] Cancelled err:', e.message));
+        });
+      }
+    }
 
     return res.json({
       success: true,
@@ -296,7 +321,14 @@ exports.cancelOrder = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const order = await db.getAsync('SELECT * FROM orders WHERE id = ? AND user_id = ?', [id, userId]);
+    const order = await db.getAsync(
+      `SELECT o.*, s.title as service_title, u.name as customer_name, u.phone as customer_phone, u.email as customer_email
+       FROM orders o
+       LEFT JOIN services s ON o.service_id = s.id
+       LEFT JOIN users u ON o.user_id = u.id
+       WHERE o.id = ? AND o.user_id = ?`,
+      [id, userId]
+    );
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
@@ -309,6 +341,11 @@ exports.cancelOrder = async (req, res) => {
     }
 
     await db.runAsync('UPDATE orders SET status = "cancelled", updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+
+    order.status = 'cancelled';
+    db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
+      sendOrderInvoiceEmail(order, 'failed', items).catch(e => console.error('[Email] Cancel error:', e.message));
+    });
 
     return res.json({
       success: true,
