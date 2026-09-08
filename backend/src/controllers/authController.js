@@ -338,7 +338,8 @@ exports.googleLogin = async (req, res) => {
 // 4b. Web/App Google OAuth URL Redirect
 exports.googleOAuthRedirect = (req, res) => {
   try {
-    const isApp = req.query.platform === 'app';
+    const isApp = req.query.platform === 'app' || 
+                  (req.query.returnUrl && (req.query.returnUrl.startsWith('solwash://') || req.query.returnUrl.includes('androidplatform.net')));
     const returnUrl = isApp ? 'solwash://auth' : (req.query.returnUrl || req.headers.referer || 'http://localhost:3001');
 
     if (!env.GOOGLE_CLIENT_ID) {
@@ -446,7 +447,7 @@ exports.googleOAuthCallback = async (req, res) => {
 
     // Check if this is an Android APK Deep Link redirect
     let redirectBase = state.returnUrl || 'http://localhost:3001';
-    if (state.isApp || redirectBase.startsWith('solwash://')) {
+    if (state.isApp || redirectBase.startsWith('solwash://') || redirectBase.includes('androidplatform.net')) {
       const appRedirectUrl = `solwash://auth?token=${encodeURIComponent(token)}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`;
       return res.send(`
         <!DOCTYPE html>

@@ -1747,13 +1747,14 @@ function setupOtpAuthentication() {
   // Global handler for Android native Deep Link callback (solwash://auth)
   window.handleDeepLinkAuth = (token, name, email) => {
     authToken = token;
-    currentCustomer = { id: 1, name: decodeURIComponent(name), email: decodeURIComponent(email), role: 'customer' };
+    currentCustomer = { name: decodeURIComponent(name || 'User'), email: decodeURIComponent(email || ''), role: 'customer' };
     localStorage.setItem('solwash_customer_token', authToken);
     localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
     updateCustomerUI();
     resetOtpForm();
     showToast(`✓ Google Sign-in: Welcome, ${currentCustomer.name}!`);
     showScreen('tab-home');
+    verifyCustomer();
   };
 
   // Initialize and Render Official Google GSI Button if supported in environment
@@ -1817,8 +1818,17 @@ function setupOtpAuthentication() {
   if (googleBtn) {
     googleBtn.addEventListener('click', () => {
       showToast('Connecting to Google...');
-      const returnUrl = window.location.origin;
-      const authUrl = `${API_BASE}/auth/google/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+      const isAndroidApp = window.location.hostname === 'appassets.androidplatform.net' || 
+                           window.location.protocol === 'file:' ||
+                           !window.location.origin ||
+                           window.location.origin.includes('androidplatform.net');
+      let authUrl;
+      if (isAndroidApp) {
+        authUrl = `${API_BASE}/auth/google/login?platform=app&returnUrl=solwash://auth`;
+      } else {
+        const returnUrl = window.location.origin;
+        authUrl = `${API_BASE}/auth/google/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+      }
       window.location.href = authUrl;
     });
   }
