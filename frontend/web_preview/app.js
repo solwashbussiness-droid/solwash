@@ -1380,8 +1380,8 @@ function setupOtpAuthentication() {
   // ----------------------------------------------------
   const googleBtn = document.getElementById('googleDirectLoginBtn');
 
-  // Google Client ID (Optional for localhost)
-  const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "";
+  // Google Client ID
+  const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "859731657038-4h9fj3o4k4k0bp47viq8o2498ksp10ua.apps.googleusercontent.com";
 
   // Listen for popup OAuth messages
   window.addEventListener('message', (event) => {
