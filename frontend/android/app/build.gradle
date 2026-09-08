@@ -14,8 +14,18 @@ android {
         versionName "1.0.0"
     }
 
+    signingConfigs {
+        release {
+            storeFile file('../solwash-release.jks')
+            storePassword 'SolWash@2026'
+            keyAlias 'solwash'
+            keyPassword 'SolWash@2026'
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

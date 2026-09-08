@@ -21,6 +21,8 @@ Thumbs.db
 
 # Mobile and Build artifacts
 *.apk
+*.aab
+release_build/
 .gradle/
 **/build/
 
