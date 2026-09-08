@@ -1,6 +1,7 @@
 const { db } = require('../database/db');
 const { sendOrderNotification } = require('../services/telegramService');
 const { sendOrderInvoiceEmail } = require('../services/emailService');
+const { createInAppNotification } = require('./notificationController');
 
 // Helper to generate readable order number
 const generateOrderNumber = () => {
@@ -125,6 +126,14 @@ exports.createOrder = async (req, res) => {
     sendOrderInvoiceEmail(order, 'initiated', orderItems).catch(err => {
       console.error('[Email] Background dispatch failed:', err.message);
     });
+
+    // Dispatch in-app notification for user
+    createInAppNotification({
+      userId,
+      title: 'Booking Confirmed! ☀️',
+      message: `Your solar cleaning booking #${order.order_number} has been scheduled for ${order.pickup_date} (${order.pickup_slot}).`,
+      type: 'order'
+    }).catch(e => console.error('[Notification] In-app notification error:', e.message));
 
     return res.status(201).json({
       success: true,
@@ -288,8 +297,27 @@ exports.updateOrderStatus = async (req, res) => {
       [id]
     );
 
-    // If status changed to confirmed or cancelled, trigger relevant email invoice
+    // If status changed, trigger notification & relevant email invoice
     if (status && status !== existing.status) {
+      const statusLabels = {
+        confirmed: 'Confirmed',
+        picked_up: 'Technician Dispatched',
+        in_process: 'Cleaning In Progress',
+        ready: 'Cleaning Completed',
+        out_for_delivery: 'Quality Inspection',
+        delivered: 'Service Completed',
+        cancelled: 'Cancelled'
+      };
+      const label = statusLabels[status] || status.replace('_', ' ');
+
+      // Dispatch in-app notification to customer
+      createInAppNotification({
+        userId: existing.user_id,
+        title: `Booking #${existing.order_number} Update ☀️`,
+        message: `Your solar cleaning booking is now: ${label}.`,
+        type: status === 'cancelled' ? 'alert' : 'order'
+      }).catch(e => console.error('[Notification] Status change notif err:', e.message));
+
       if (status === 'confirmed') {
         db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
           sendOrderInvoiceEmail(updated, 'confirmed', items).catch(e => console.error('[Email] Confirmed err:', e.message));
@@ -346,6 +374,13 @@ exports.cancelOrder = async (req, res) => {
     db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
       sendOrderInvoiceEmail(order, 'failed', items).catch(e => console.error('[Email] Cancel error:', e.message));
     });
+
+    createInAppNotification({
+      userId,
+      title: 'Booking Cancelled',
+      message: `Your solar wash booking #${order.order_number} has been cancelled.`,
+      type: 'alert'
+    }).catch(e => console.error('[Notification] Cancel notif err:', e.message));
 
     return res.json({
       success: true,

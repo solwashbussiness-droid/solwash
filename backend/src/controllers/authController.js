@@ -4,6 +4,7 @@ const { OAuth2Client } = require('google-auth-library');
 const nodemailer = require('nodemailer');
 const env = require('../config/env');
 const { db } = require('../database/db');
+const { generateRandomAvatar } = require('../utils/avatar');
 
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET);
 
@@ -170,14 +171,18 @@ exports.verifyOtp = async (req, res) => {
       const randomPassword = Math.random().toString(36).slice(-8);
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
+      const randomAvatar = generateRandomAvatar(cleanEmail);
 
       const result = await db.runAsync(
-        `INSERT INTO users (name, email, phone, password, role, address)
-         VALUES (?, ?, null, ?, 'customer', null)`,
-        [defaultName, cleanEmail, hashedPassword]
+        `INSERT INTO users (name, email, phone, password, role, address, avatar)
+         VALUES (?, ?, null, ?, 'customer', null, ?)`,
+        [defaultName, cleanEmail, hashedPassword, randomAvatar]
       );
 
       user = await db.getAsync('SELECT * FROM users WHERE id = ?', [result.lastID]);
+    } else if (!user.avatar) {
+      user.avatar = generateRandomAvatar(user.email);
+      await db.runAsync('UPDATE users SET avatar = ? WHERE id = ?', [user.avatar, user.id]);
     }
 
     const token = generateToken(user);
@@ -220,14 +225,18 @@ exports.directLogin = async (req, res) => {
       const randomPass = Math.random().toString(36).slice(-8);
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPass, salt);
+      const randomAvatar = generateRandomAvatar(identifier);
 
       const result = await db.runAsync(
-        `INSERT INTO users (name, email, phone, password, role, address)
-         VALUES (?, ?, ?, ?, 'customer', null)`,
-        [defaultName, identifier, phone || null, hashedPassword]
+        `INSERT INTO users (name, email, phone, password, role, address, avatar)
+         VALUES (?, ?, ?, ?, 'customer', null, ?)`,
+        [defaultName, identifier, phone || null, hashedPassword, randomAvatar]
       );
 
       user = await db.getAsync('SELECT * FROM users WHERE id = ?', [result.lastID]);
+    } else if (!user.avatar) {
+      user.avatar = generateRandomAvatar(user.email);
+      await db.runAsync('UPDATE users SET avatar = ? WHERE id = ?', [user.avatar, user.id]);
     }
 
     const token = generateToken(user);
@@ -290,14 +299,18 @@ exports.googleLogin = async (req, res) => {
       const randomPassword = Math.random().toString(36).slice(-10);
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
+      const userAvatar = picture || generateRandomAvatar(cleanEmail);
 
       const result = await db.runAsync(
-        `INSERT INTO users (name, email, phone, password, role, address)
-         VALUES (?, ?, null, ?, 'customer', null)`,
-        [name || cleanEmail.split('@')[0], cleanEmail, hashedPassword]
+        `INSERT INTO users (name, email, phone, password, role, address, avatar)
+         VALUES (?, ?, null, ?, 'customer', null, ?)`,
+        [name || cleanEmail.split('@')[0], cleanEmail, hashedPassword, userAvatar]
       );
 
       user = await db.getAsync('SELECT * FROM users WHERE id = ?', [result.lastID]);
+    } else if (!user.avatar) {
+      user.avatar = picture || generateRandomAvatar(user.email);
+      await db.runAsync('UPDATE users SET avatar = ? WHERE id = ?', [user.avatar, user.id]);
     }
 
     const token = generateToken(user);
@@ -409,6 +422,8 @@ exports.googleOAuthCallback = async (req, res) => {
     const cleanEmail = payload.email.toLowerCase().trim();
     const userName = payload.name || cleanEmail.split('@')[0];
 
+    const userAvatar = payload.picture || generateRandomAvatar(cleanEmail);
+
     let user = await db.getAsync('SELECT * FROM users WHERE email = ?', [cleanEmail]);
     if (!user) {
       const randomPassword = Math.random().toString(36).slice(-10);
@@ -416,11 +431,14 @@ exports.googleOAuthCallback = async (req, res) => {
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
 
       const result = await db.runAsync(
-        `INSERT INTO users (name, email, phone, password, role, address)
-         VALUES (?, ?, null, ?, 'customer', null)`,
-        [userName, cleanEmail, hashedPassword]
+        `INSERT INTO users (name, email, phone, password, role, address, avatar)
+         VALUES (?, ?, null, ?, 'customer', null, ?)`,
+        [userName, cleanEmail, hashedPassword, userAvatar]
       );
       user = await db.getAsync('SELECT * FROM users WHERE id = ?', [result.lastID]);
+    } else if (!user.avatar) {
+      user.avatar = userAvatar;
+      await db.runAsync('UPDATE users SET avatar = ? WHERE id = ?', [user.avatar, user.id]);
     }
 
     const token = generateToken(user);
@@ -499,15 +517,16 @@ exports.register = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    const userAvatar = req.body.avatar || generateRandomAvatar(email);
 
     const result = await db.runAsync(
-      `INSERT INTO users (name, email, phone, password, role, address)
-       VALUES (?, ?, ?, ?, 'customer', ?)`,
-      [name, email.toLowerCase(), phone || null, hashedPassword, address || null]
+      `INSERT INTO users (name, email, phone, password, role, address, avatar)
+       VALUES (?, ?, ?, ?, 'customer', ?, ?)`,
+      [name, email.toLowerCase(), phone || null, hashedPassword, address || null, userAvatar]
     );
 
     const newUser = await db.getAsync(
-      'SELECT id, name, email, phone, role, address, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, phone, role, address, avatar, created_at FROM users WHERE id = ?',
       [result.lastID]
     );
 
@@ -573,6 +592,11 @@ exports.login = async (req, res) => {
       });
     }
 
+    if (!user.avatar) {
+      user.avatar = generateRandomAvatar(user.email);
+      await db.runAsync('UPDATE users SET avatar = ? WHERE id = ?', [user.avatar, user.id]);
+    }
+
     const token = generateToken(user);
     delete user.password;
 
@@ -595,16 +619,20 @@ exports.login = async (req, res) => {
 
 // Get current profile
 exports.getProfile = async (req, res) => {
+  if (req.user && !req.user.avatar) {
+    req.user.avatar = generateRandomAvatar(req.user.email);
+    await db.runAsync('UPDATE users SET avatar = ? WHERE id = ?', [req.user.avatar, req.user.id]);
+  }
   return res.json({
     success: true,
     data: req.user
   });
 };
 
-// Update profile
+// Update profile (name, phone, address, avatar)
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, phone, address } = req.body;
+    const { name, phone, address, avatar } = req.body;
     const userId = req.user.id;
 
     await db.runAsync(
@@ -612,13 +640,14 @@ exports.updateProfile = async (req, res) => {
        SET name = COALESCE(?, name),
            phone = COALESCE(?, phone),
            address = COALESCE(?, address),
+           avatar = COALESCE(?, avatar),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [name, phone, address, userId]
+      [name, phone, address, avatar, userId]
     );
 
     const updatedUser = await db.getAsync(
-      'SELECT id, name, email, phone, role, address, created_at, updated_at FROM users WHERE id = ?',
+      'SELECT id, name, email, phone, role, address, avatar, created_at, updated_at FROM users WHERE id = ?',
       [userId]
     );
 
@@ -631,6 +660,28 @@ exports.updateProfile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Profile update failed.',
+      error: error.message
+    });
+  }
+};
+
+// Generate and save a new random avatar
+exports.randomizeAvatar = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const newAvatar = generateRandomAvatar(`user_${userId}_${Date.now()}`);
+
+    await db.runAsync('UPDATE users SET avatar = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newAvatar, userId]);
+
+    return res.json({
+      success: true,
+      message: 'Avatar updated successfully!',
+      avatar: newAvatar
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to randomize avatar.',
       error: error.message
     });
   }

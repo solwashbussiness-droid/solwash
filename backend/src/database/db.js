@@ -64,10 +64,14 @@ const initDatabase = async () => {
         password TEXT NOT NULL,
         role TEXT DEFAULT 'customer' CHECK(role IN ('customer', 'admin', 'rider')),
         address TEXT,
+        avatar TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration for users table
+    try { await db.runAsync('ALTER TABLE users ADD COLUMN avatar TEXT'); } catch (e) {}
 
     // 2. Services Table (Dry clean, Wash & Fold, Steam Press, Shoe Cleaning, etc.)
     await db.runAsync(`
@@ -142,7 +146,21 @@ const initDatabase = async () => {
       )
     `);
 
-    // 6. Seed default admin if not exists
+    // 6. In-App Notifications Table for User App
+    await db.runAsync(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        type TEXT DEFAULT 'info',
+        is_read INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
+    `);
+
+    // 7. Seed default admin if not exists
     const existingAdmin = await db.getAsync(
       'SELECT id FROM users WHERE email = ?',
       [env.DEFAULT_ADMIN.email]

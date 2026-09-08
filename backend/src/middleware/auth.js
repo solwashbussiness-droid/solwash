@@ -17,7 +17,7 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(token, env.JWT_SECRET);
 
     const user = await db.getAsync(
-      'SELECT id, name, email, phone, role, address, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, phone, role, address, avatar, created_at FROM users WHERE id = ?',
       [decoded.id]
     );
 

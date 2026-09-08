@@ -9,7 +9,16 @@ function getInitialApiBase() {
   const saved = localStorage.getItem('solwash_api_url');
   if (saved) return saved.trim().replace(/\/$/, '');
 
-  return 'http://localhost:5000/api';
+  const hostname = window.location.hostname;
+  const port = window.location.port;
+
+  if (port === '3001' || port === '3000') {
+    return `http://${hostname || 'localhost'}:5000/api`;
+  }
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000/api';
+  }
+  return '/api';
 }
 
 let API_BASE = getInitialApiBase();
@@ -28,6 +37,59 @@ try {
 let currentSelectedService = null;
 let availableServices = [];
 
+function handleCustomerSessionExpired() {
+  if (authToken) {
+    authToken = '';
+    currentCustomer = null;
+    localStorage.removeItem('solwash_customer_token');
+    localStorage.removeItem('solwash_customer_user');
+    updateCustomerUI();
+    resetOtpForm();
+    showScreen('tab-login');
+    showToast('Session expired. Please sign in again.');
+  }
+}
+
+// Centralized safe customer API fetch helper
+async function customerApiFetch(url, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+    ...(options.headers || {})
+  };
+
+  let res;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch (netErr) {
+    throw new Error('Unable to connect to server. Please ensure backend is running.');
+  }
+
+  if (res.status === 401) {
+    handleCustomerSessionExpired();
+    throw new Error('Session expired. Please sign in again.');
+  }
+
+  let data;
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      throw new Error('Server returned invalid JSON response.');
+    }
+  } else {
+    const text = await res.text();
+    data = { success: res.ok, message: text || res.statusText };
+  }
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || `Request failed with status ${res.status}`);
+  }
+
+  return data;
+}
+
 // DOM Elements
 const navTabs = document.querySelectorAll('.nav-tab');
 const screenTabs = document.querySelectorAll('.screen-tab');
@@ -43,8 +105,299 @@ const bookingForm = document.getElementById('bookingForm');
 const mobileLoginForm = document.getElementById('mobileLoginForm');
 const modalServiceTitle = document.getElementById('modalServiceTitle');
 
+// ===================================================
+// SolWash Avatar & Profile System
+// ===================================================
+const AVATAR_COLLECTIONS = ['bottts', 'avataaars', 'lorelei', 'micah', 'thumbs', 'personas'];
+const AVATAR_BG_COLORS = ['b6e3f4', 'c0aede', 'd1d4f9', 'ffd5dc', 'ffdfbf', 'd1fae5', 'fef08a'];
+
+function generateRandomAvatarUrl(seed) {
+  const s = seed ? encodeURIComponent(String(seed).trim().toLowerCase()) : `sol_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const style = AVATAR_COLLECTIONS[Math.floor(Math.random() * AVATAR_COLLECTIONS.length)];
+  const bg = AVATAR_BG_COLORS[Math.floor(Math.random() * AVATAR_BG_COLORS.length)];
+  return `https://api.dicebear.com/7.x/${style}/svg?seed=${s}&backgroundColor=${bg}`;
+}
+
+function updateCustomerAvatar(avatarUrl) {
+  const headerAvatarImg = document.getElementById('headerAvatarImg');
+  const headerAvatarPlaceholder = document.getElementById('headerAvatarPlaceholder');
+  const profileAvatarImg = document.getElementById('profileAvatarImg');
+  const profileAvatarFallback = document.getElementById('profileAvatarFallback');
+
+  if (avatarUrl) {
+    if (headerAvatarImg) {
+      headerAvatarImg.src = avatarUrl;
+      headerAvatarImg.style.display = 'block';
+      headerAvatarImg.onerror = () => {
+        headerAvatarImg.style.display = 'none';
+        if (headerAvatarPlaceholder) headerAvatarPlaceholder.style.display = 'block';
+      };
+    }
+    if (headerAvatarPlaceholder) headerAvatarPlaceholder.style.display = 'none';
+
+    if (profileAvatarImg) {
+      profileAvatarImg.src = avatarUrl;
+      profileAvatarImg.style.display = 'block';
+      profileAvatarImg.onerror = () => {
+        profileAvatarImg.style.display = 'none';
+        if (profileAvatarFallback) profileAvatarFallback.style.display = 'flex';
+      };
+    }
+    if (profileAvatarFallback) profileAvatarFallback.style.display = 'none';
+  } else {
+    if (headerAvatarImg) headerAvatarImg.style.display = 'none';
+    if (headerAvatarPlaceholder) headerAvatarPlaceholder.style.display = 'block';
+
+    if (profileAvatarImg) profileAvatarImg.style.display = 'none';
+    if (profileAvatarFallback) {
+      profileAvatarFallback.style.display = 'flex';
+      const initial = (currentCustomer && currentCustomer.name) ? currentCustomer.name.trim()[0].toUpperCase() : 'U';
+      profileAvatarFallback.textContent = initial;
+    }
+  }
+}
+
+// ===================================================
+// SolWash In-App Notification System
+// ===================================================
+let userNotifications = [];
+
+function triggerBrowserNotification(title, message) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, {
+        body: message,
+        icon: 'logo.png'
+      });
+    } catch (e) {}
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatNotifTime(dateStr) {
+  if (!dateStr) return 'Just now';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function renderNotifications(items) {
+  const container = document.getElementById('notifListContainer');
+  if (!container) return;
+
+  if (!items || items.length === 0) {
+    container.innerHTML = `
+      <div class="notif-empty-state">
+        <div class="notif-empty-icon">☀️</div>
+        <h4 style="margin: 0 0 6px; font-size: 15px; color: #0f172a;">No Notifications Yet</h4>
+        <p style="margin: 0; font-size: 13px; color: #64748b;">You are all caught up! Important updates about your bookings will appear here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const typeIcons = {
+    order: '☀️',
+    promo: '⚡',
+    system: '🔔',
+    alert: '⚠️',
+    info: 'ℹ️'
+  };
+
+  container.innerHTML = items.map(n => {
+    const icon = typeIcons[n.type] || '☀️';
+    const isUnread = !n.is_read;
+    const timeStr = formatNotifTime(n.created_at);
+
+    return `
+      <div class="notif-card ${isUnread ? 'unread' : ''}" data-id="${n.id}">
+        <div class="notif-card-icon ${n.type || 'info'}">${icon}</div>
+        <div class="notif-card-body">
+          <div class="notif-card-title">${escapeHtml(n.title)}</div>
+          <div class="notif-card-msg">${escapeHtml(n.message)}</div>
+          <div class="notif-card-time">${timeStr}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach click to mark single notification as read
+  container.querySelectorAll('.notif-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      const id = card.getAttribute('data-id');
+      if (card.classList.contains('unread')) {
+        card.classList.remove('unread');
+        if (authToken && !String(id).startsWith('guest_')) {
+          try {
+            await customerApiFetch(`${API_BASE}/notifications/${id}/read`, { method: 'PUT' });
+          } catch (e) {}
+        }
+        const unreadCards = container.querySelectorAll('.notif-card.unread').length;
+        const notifBadge = document.getElementById('notifBadge');
+        const notifCountPill = document.getElementById('notifCountPill');
+        if (notifBadge) {
+          if (unreadCards > 0) {
+            notifBadge.textContent = unreadCards > 9 ? '9+' : unreadCards;
+            notifBadge.style.display = 'flex';
+          } else {
+            notifBadge.style.display = 'none';
+          }
+        }
+        if (notifCountPill) {
+          if (unreadCards > 0) {
+            notifCountPill.textContent = `${unreadCards} new`;
+            notifCountPill.style.display = 'inline-block';
+          } else {
+            notifCountPill.style.display = 'none';
+          }
+        }
+      }
+    });
+  });
+}
+
+async function fetchNotifications() {
+  const notifBadge = document.getElementById('notifBadge');
+  const notifCountPill = document.getElementById('notifCountPill');
+
+  if (!authToken) {
+    userNotifications = [
+      {
+        id: 'guest_1',
+        title: 'Welcome to SolWash Solar Care! ☀️',
+        message: 'Sign in to schedule your first rooftop solar washing service.',
+        type: 'system',
+        is_read: 0,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'guest_2',
+        title: 'Solar Efficiency Tip ⚡',
+        message: 'Clean solar panels generate up to 30% more clean electricity.',
+        type: 'promo',
+        is_read: 0,
+        created_at: new Date().toISOString()
+      }
+    ];
+    renderNotifications(userNotifications);
+    if (notifBadge) {
+      notifBadge.textContent = '2';
+      notifBadge.style.display = 'flex';
+    }
+    if (notifCountPill) {
+      notifCountPill.textContent = '2 new';
+      notifCountPill.style.display = 'inline-block';
+    }
+    return;
+  }
+
+  try {
+    const res = await customerApiFetch(`${API_BASE}/notifications`, { method: 'GET' });
+    if (res.success && Array.isArray(res.data)) {
+      userNotifications = res.data;
+      renderNotifications(userNotifications);
+
+      const unread = res.unreadCount !== undefined ? res.unreadCount : userNotifications.filter(n => !n.is_read).length;
+      if (notifBadge) {
+        if (unread > 0) {
+          notifBadge.textContent = unread > 9 ? '9+' : unread;
+          notifBadge.style.display = 'flex';
+        } else {
+          notifBadge.style.display = 'none';
+        }
+      }
+      if (notifCountPill) {
+        if (unread > 0) {
+          notifCountPill.textContent = `${unread} new`;
+          notifCountPill.style.display = 'inline-block';
+        } else {
+          notifCountPill.style.display = 'none';
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch notifications:', err.message);
+  }
+}
+
+// Order Success Popup Helper
+function showOrderSuccessPopup(order) {
+  const successModal = document.getElementById('orderSuccessModal');
+  const successNum = document.getElementById('successOrderNum');
+  const successAmt = document.getElementById('successOrderAmount');
+  const successMode = document.getElementById('successOrderMode');
+  const closeBtn = document.getElementById('closeSuccessModalBtn');
+
+  if (successNum) successNum.textContent = order.order_number || `#${order.id}`;
+  if (successAmt) successAmt.textContent = `₹${Number(order.total_amount || 0).toLocaleString('en-IN')}`;
+  if (successMode) successMode.textContent = (order.payment_mode || 'cash_on_delivery').replace(/_/g, ' ');
+
+  if (successModal) {
+    successModal.classList.remove('hidden');
+  }
+
+  // Trigger notification update & browser notification
+  fetchNotifications();
+  triggerBrowserNotification(
+    'Booking Confirmed! ☀️',
+    `Your solar cleaning booking ${order.order_number || ''} has been scheduled.`
+  );
+
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (successModal) successModal.classList.add('hidden');
+      showScreen('tab-bookings');
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      const allPill = document.querySelector('.filter-pill[data-filter="all"]');
+      if (allPill) allPill.classList.add('active');
+      loadCustomerBookings();
+    };
+  }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+  // 1. Process Google OAuth token immediately if present in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('token')) {
+    authToken = urlParams.get('token');
+    const uName = urlParams.get('name') || 'Customer';
+    const uEmail = urlParams.get('email') || '';
+    currentCustomer = { id: 1, name: decodeURIComponent(uName), email: decodeURIComponent(uEmail), role: 'customer' };
+    localStorage.setItem('solwash_customer_token', authToken);
+    localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+    localStorage.setItem('solwash_onboarded', 'true');
+    document.documentElement.classList.add('no-splash');
+
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
+
+  // 2. Hide splash screen ONLY if logged in
+  const splashContainer = document.getElementById('splash-onboarding');
+  if (authToken || localStorage.getItem('solwash_customer_token')) {
+    if (splashContainer) splashContainer.style.display = 'none';
+    document.documentElement.classList.add('no-splash');
+  } else {
+    // Unlogged user: show splash screen first
+    if (splashContainer) splashContainer.style.display = 'block';
+    document.documentElement.classList.remove('no-splash');
+  }
+
   setupNetworkStatusMonitor();
   setupSplashOnboarding();
   setupNavigation();
@@ -54,28 +407,16 @@ document.addEventListener('DOMContentLoaded', () => {
   setupOtpAuthentication();
   loadPublicServices();
 
-  // Check if redirected from Google OAuth with token
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.has('token')) {
-    authToken = urlParams.get('token');
-    const uName = urlParams.get('name') || 'Customer';
-    const uEmail = urlParams.get('email') || '';
-    currentCustomer = { id: 1, name: decodeURIComponent(uName), email: decodeURIComponent(uEmail), role: 'customer' };
-    localStorage.setItem('solwash_customer_token', authToken);
-    localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }
-
   if (authToken) {
     updateCustomerUI();
     showScreen('tab-home');
     verifyCustomer();
+    fetchNotifications();
   } else {
-    // Show OTP Login Screen first
+    // Show OTP Login Screen behind splash screen
     showScreen('tab-login');
     updateCustomerUI();
+    fetchNotifications();
   }
 });
 
@@ -84,11 +425,16 @@ function setupSplashOnboarding() {
   const splashContainer = document.getElementById('splash-onboarding');
   if (!splashContainer) return;
 
-  // If already completed onboarding previously, hide immediately
-  if (localStorage.getItem('solwash_onboarded') === 'true') {
+  // Logged in user: NEVER show splash screen
+  if (authToken || localStorage.getItem('solwash_customer_token')) {
     splashContainer.style.display = 'none';
+    document.documentElement.classList.add('no-splash');
     return;
   }
+
+  // Unlogged user: ALWAYS show splash screen first
+  splashContainer.style.display = 'block';
+  document.documentElement.classList.remove('no-splash');
 
   const slides = splashContainer.querySelectorAll('.splash-slide');
   const dots = splashContainer.querySelectorAll('.splash-dot');
@@ -421,6 +767,88 @@ function setupEventListeners() {
   if (closeModalBtn) closeModalBtn.addEventListener('click', () => bookingModal.classList.add('hidden'));
   if (closeLoginModalBtn) closeLoginModalBtn.addEventListener('click', () => loginModal.classList.add('hidden'));
 
+  // Notification Modal Handlers
+  const notifBtn = document.getElementById('notifBtn');
+  const notificationsModal = document.getElementById('notificationsModal');
+  const closeNotifModalBtn = document.getElementById('closeNotifModalBtn');
+  const markAllReadBtn = document.getElementById('markAllReadBtn');
+
+  if (notifBtn) {
+    notifBtn.addEventListener('click', () => {
+      if (notificationsModal) {
+        notificationsModal.classList.remove('hidden');
+      }
+      fetchNotifications();
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    });
+  }
+
+  if (closeNotifModalBtn && notificationsModal) {
+    closeNotifModalBtn.addEventListener('click', () => {
+      notificationsModal.classList.add('hidden');
+    });
+  }
+
+  if (notificationsModal) {
+    notificationsModal.addEventListener('click', (e) => {
+      if (e.target === notificationsModal) {
+        notificationsModal.classList.add('hidden');
+      }
+    });
+  }
+
+  if (markAllReadBtn) {
+    markAllReadBtn.addEventListener('click', async () => {
+      document.querySelectorAll('.notif-card.unread').forEach(c => c.classList.remove('unread'));
+      const notifBadge = document.getElementById('notifBadge');
+      const notifCountPill = document.getElementById('notifCountPill');
+      if (notifBadge) notifBadge.style.display = 'none';
+      if (notifCountPill) notifCountPill.style.display = 'none';
+
+      if (authToken) {
+        try {
+          await customerApiFetch(`${API_BASE}/notifications/mark-all-read`, { method: 'POST' });
+        } catch (e) {}
+      }
+      showToast('All notifications marked as read.');
+    });
+  }
+
+  // Header Avatar Click -> Navigate to Profile
+  const profileAvatarBtn = document.getElementById('profileAvatarBtn');
+  if (profileAvatarBtn) {
+    profileAvatarBtn.addEventListener('click', () => {
+      showScreen('tab-profile');
+    });
+  }
+
+  // Randomize Avatar Button Click
+  const btnRandomizeAvatar = document.getElementById('btnRandomizeAvatar');
+  if (btnRandomizeAvatar) {
+    btnRandomizeAvatar.addEventListener('click', async () => {
+      btnRandomizeAvatar.style.transform = 'rotate(360deg)';
+      setTimeout(() => { btnRandomizeAvatar.style.transform = ''; }, 300);
+
+      const newAvatar = generateRandomAvatarUrl(`user_${Date.now()}_${Math.random()}`);
+      if (currentCustomer) {
+        currentCustomer.avatar = newAvatar;
+        localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+      }
+      updateCustomerAvatar(newAvatar);
+      showToast('✓ New profile avatar applied!');
+
+      if (authToken) {
+        try {
+          await customerApiFetch(`${API_BASE}/auth/random-avatar`, { method: 'POST' });
+        } catch (err) {
+          console.warn('Backend avatar sync:', err.message);
+        }
+      }
+    });
+  }
+
   // GPS Location button click
   const detectLocationBtn = document.getElementById('detectLocationBtn');
   if (detectLocationBtn) {
@@ -494,12 +922,8 @@ function setupEventListeners() {
 
       try {
         // Step 1: Create Order on SolWash Backend
-        const res = await fetch(`${API_BASE}/orders`, {
+        const result = await customerApiFetch(`${API_BASE}/orders`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
-          },
           body: JSON.stringify({
             service_id: currentSelectedService ? currentSelectedService.id : 1,
             pickup_date: date,
@@ -518,11 +942,6 @@ function setupEventListeners() {
           })
         });
 
-        const result = await res.json();
-        if (!res.ok || !result.success) {
-          throw new Error(result.message || 'Failed to place booking');
-        }
-
         if (currentCustomer) {
           currentCustomer.phone = formattedPhone;
           localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
@@ -533,12 +952,7 @@ function setupEventListeners() {
         // Step 2: Handle Offline Pay After Service
         if (paymentMode === 'cash_on_delivery') {
           bookingModal.classList.add('hidden');
-          showToast(`Booking #${createdOrder.order_number} confirmed! Pay ₹${createdOrder.total_amount} after service.`);
-          showScreen('tab-bookings');
-          document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-          const allPill = document.querySelector('.filter-pill[data-filter="all"]');
-          if (allPill) allPill.classList.add('active');
-          await loadCustomerBookings();
+          showOrderSuccessPopup(createdOrder);
           return;
         }
 
@@ -547,12 +961,8 @@ function setupEventListeners() {
           showToast('Initializing Razorpay Checkout...');
 
           // Call backend to create Razorpay Order
-          const rzpOrderRes = await fetch(`${API_BASE}/payments/razorpay-order`, {
+          const rzpOrderData = await customerApiFetch(`${API_BASE}/payments/razorpay-order`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`
-            },
             body: JSON.stringify({
               amount: createdOrder.total_amount,
               receipt: createdOrder.order_number,
@@ -562,11 +972,6 @@ function setupEventListeners() {
               }
             })
           });
-
-          const rzpOrderData = await rzpOrderRes.json();
-          if (!rzpOrderRes.ok || !rzpOrderData.success) {
-            throw new Error(rzpOrderData.message || 'Payment gateway initialization failed');
-          }
 
           const rzpData = rzpOrderData.data;
 
@@ -605,12 +1010,7 @@ function setupEventListeners() {
                   });
                   const verifyResult = await verifyRes.json();
                   bookingModal.classList.add('hidden');
-                  showToast(`✓ Payment Successful! Booking #${createdOrder.order_number} marked PAID.`);
-                  showScreen('tab-bookings');
-                  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-                  const allPill = document.querySelector('.filter-pill[data-filter="all"]');
-                  if (allPill) allPill.classList.add('active');
-                  await loadCustomerBookings();
+                  showOrderSuccessPopup(createdOrder);
                 } catch (vErr) {
                   bookingModal.classList.add('hidden');
                   showToast(`Booking #${createdOrder.order_number} saved.`);
@@ -661,17 +1061,10 @@ function setupEventListeners() {
                 })
               });
               bookingModal.classList.add('hidden');
-              showToast(`✓ Payment Successful! Booking #${createdOrder.order_number} marked PAID.`);
-              showScreen('tab-bookings');
-              document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-              const allPill = document.querySelector('.filter-pill[data-filter="all"]');
-              if (allPill) allPill.classList.add('active');
-              await loadCustomerBookings();
+              showOrderSuccessPopup(createdOrder);
             } else {
               bookingModal.classList.add('hidden');
-              showToast(`Booking #${createdOrder.order_number} saved. (Pending Online Payment)`);
-              showScreen('tab-bookings');
-              await loadCustomerBookings();
+              showOrderSuccessPopup(createdOrder);
             }
           }
         }
@@ -882,40 +1275,77 @@ async function loadPublicServices() {
   const homeContainer = document.getElementById('homeServicesContainer');
 
   try {
-    const res = await fetch(`${API_BASE}/services`);
-    const result = await res.json();
-    if (res.ok && result.success) {
-      availableServices = result.data || [];
+    const result = await customerApiFetch(`${API_BASE}/services`, { method: 'GET' });
+    availableServices = result.data || [];
 
-      // 1. Render Home Screen Featured Container
-      if (homeContainer) {
-        if (availableServices.length === 0) {
-          homeContainer.innerHTML = `
-            <div style="text-align: center; padding: 28px 16px; color: #64748b; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
-              <div style="font-size: 14px; font-weight: 600; color: #0f172a;">No solar services available</div>
-              <div style="font-size: 12px; margin-top: 4px;">Services added in the Admin Panel will appear here live.</div>
+    // 1. Render Home Screen Featured Container
+    if (homeContainer) {
+      if (availableServices.length === 0) {
+        homeContainer.innerHTML = `
+          <div style="text-align: center; padding: 28px 16px; color: #64748b; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <div style="font-size: 14px; font-weight: 600; color: #0f172a;">No solar services available</div>
+            <div style="font-size: 12px; margin-top: 4px;">Services added in the Admin Panel will appear here live.</div>
+          </div>
+        `;
+      } else {
+        // Show top services on Home screen
+        const featured = availableServices[0];
+        const safeTitle = (featured.title || '').replace(/'/g, "\\'");
+        const unit = featured.price_unit || '3 kWh';
+        homeContainer.innerHTML = `
+          <div class="service-deal-card">
+            <div class="deal-top">
+              <div class="price-wrap">
+                <span class="currency">₹</span><span class="price-val">${featured.base_price}</span>
+                <span class="discount-badge" style="text-transform: uppercase;">${unit}</span>
+              </div>
+              <button class="btn-outline-book" onclick="openBookingModal('${safeTitle}', ${featured.base_price}, ${featured.id}, '${unit}')">Book Now</button>
             </div>
-          `;
-        } else {
-          // Show top services on Home screen
-          const featured = availableServices[0];
-          const safeTitle = (featured.title || '').replace(/'/g, "\\'");
-          const unit = featured.price_unit || '3 kWh';
-          homeContainer.innerHTML = `
-            <div class="service-deal-card">
+            <div class="deal-title">${featured.title}</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">${featured.description || 'Professional SolWash de-ionized solar panel cleaning.'}</div>
+            <div class="deal-tags" style="margin-top: 10px;">
+              <span class="check-tag">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="#1e3a8a"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                ${(featured.category || 'Solar').toUpperCase()}
+              </span>
+              <span class="check-tag">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="#10b981"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                Pure DI Water Wash
+              </span>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // 2. Render Services Screen List Container
+    if (container) {
+      if (availableServices.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 36px 16px; color: #64748b; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <div style="font-size: 14px; font-weight: 600; color: #0f172a;">No solar services listed yet</div>
+            <div style="font-size: 12px; margin-top: 4px;">Services added by admin in the portal will appear here immediately.</div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = availableServices.map(s => {
+          const safeTitle = (s.title || '').replace(/'/g, "\\'");
+          const unit = s.price_unit || '3 kWh';
+          return `
+            <div class="service-deal-card" style="margin-bottom: 14px;">
               <div class="deal-top">
                 <div class="price-wrap">
-                  <span class="currency">₹</span><span class="price-val">${featured.base_price}</span>
+                  <span class="currency">₹</span><span class="price-val">${s.base_price}</span>
                   <span class="discount-badge" style="text-transform: uppercase;">${unit}</span>
                 </div>
-                <button class="btn-outline-book" onclick="openBookingModal('${safeTitle}', ${featured.base_price}, ${featured.id}, '${unit}')">Book Now</button>
+                <button class="btn-outline-book" onclick="openBookingModal('${safeTitle}', ${s.base_price}, ${s.id}, '${unit}')">Book Now</button>
               </div>
-              <div class="deal-title">${featured.title}</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">${featured.description || 'Professional SolWash de-ionized solar panel cleaning.'}</div>
+              <div class="deal-title">${s.title}</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">${s.description || 'Professional SolWash de-ionized solar panel cleaning.'}</div>
               <div class="deal-tags" style="margin-top: 10px;">
                 <span class="check-tag">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="#1e3a8a"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                  ${(featured.category || 'Solar').toUpperCase()}
+                  ${(s.category || 'Solar').toUpperCase()}
                 </span>
                 <span class="check-tag">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="#10b981"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
@@ -924,51 +1354,20 @@ async function loadPublicServices() {
               </div>
             </div>
           `;
-        }
-      }
-
-      // 2. Render Services Screen List Container
-      if (container) {
-        if (availableServices.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; padding: 36px 16px; color: #64748b; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
-              <div style="font-size: 14px; font-weight: 600; color: #0f172a;">No solar services listed yet</div>
-              <div style="font-size: 12px; margin-top: 4px;">Services added by admin in the portal will appear here immediately.</div>
-            </div>
-          `;
-        } else {
-          container.innerHTML = availableServices.map(s => {
-            const safeTitle = (s.title || '').replace(/'/g, "\\'");
-            const unit = s.price_unit || '3 kWh';
-            return `
-              <div class="service-deal-card" style="margin-bottom: 14px;">
-                <div class="deal-top">
-                  <div class="price-wrap">
-                    <span class="currency">₹</span><span class="price-val">${s.base_price}</span>
-                    <span class="discount-badge" style="text-transform: uppercase;">${unit}</span>
-                  </div>
-                  <button class="btn-outline-book" onclick="openBookingModal('${safeTitle}', ${s.base_price}, ${s.id}, '${unit}')">Book Now</button>
-                </div>
-                <div class="deal-title">${s.title}</div>
-                <div style="font-size: 12px; color: #64748b; margin-top: 4px; line-height: 1.4;">${s.description || 'Professional SolWash de-ionized solar panel cleaning.'}</div>
-                <div class="deal-tags" style="margin-top: 10px;">
-                  <span class="check-tag">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="#1e3a8a"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    ${(s.category || 'Solar').toUpperCase()}
-                  </span>
-                  <span class="check-tag">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="#10b981"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    Pure DI Water Wash
-                  </span>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
+        }).join('');
       }
     }
   } catch (err) {
     console.error('Failed to load dynamic services in customer preview:', err);
+    const retryHtml = `
+      <div style="text-align: center; padding: 28px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; color: #b91c1c;">
+        <div style="font-size: 14px; font-weight: 700; color: #991b1b;">⚠️ Unable to Load Services</div>
+        <div style="font-size: 12px; margin-top: 4px;">${err.message}</div>
+        <button type="button" onclick="loadPublicServices()" style="margin-top: 12px; background: #1e3a8a; color: #ffffff; border: none; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">🔄 Tap to Retry</button>
+      </div>
+    `;
+    if (homeContainer) homeContainer.innerHTML = retryHtml;
+    if (container) container.innerHTML = retryHtml;
   }
 }
 
@@ -985,42 +1384,53 @@ async function verifyCustomer() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-    const result = await res.json();
-    if (res.ok && result.success) {
-      currentCustomer = result.data;
-      localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
-      updateCustomerUI();
-      // Ensure the screen is not showing tab-login when logged in
-      const loginTab = document.getElementById('tab-login');
-      if (loginTab && loginTab.classList.contains('active')) {
-        showScreen('tab-home');
-      }
-    } else {
-      authToken = '';
-      currentCustomer = null;
-      localStorage.removeItem('solwash_customer_token');
-      localStorage.removeItem('solwash_customer_user');
-      updateCustomerUI();
-      resetOtpForm();
-      showScreen('tab-login');
-      showToast('Session expired. Please login again.');
+    const result = await customerApiFetch(`${API_BASE}/auth/me`, { method: 'GET' });
+    currentCustomer = result.data;
+    localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+    updateCustomerUI();
+    fetchNotifications();
+    // Ensure the screen is not showing tab-login when logged in
+    const loginTab = document.getElementById('tab-login');
+    if (loginTab && loginTab.classList.contains('active')) {
+      showScreen('tab-home');
     }
   } catch (e) {
-    console.warn('Customer session verify warning:', e);
-    updateCustomerUI();
+    console.warn('Customer session verify:', e.message);
   }
 }
 
 function updateCustomerUI() {
+  const profileCardName = document.getElementById('profileCardName');
+  const profileCardEmail = document.getElementById('profileCardEmail');
+  const profileCardStatus = document.getElementById('profileCardStatus');
+
   if (currentCustomer) {
-    headerUserName.textContent = currentCustomer.name.split(' ')[0] || 'User';
+    const firstName = currentCustomer.name.split(' ')[0] || 'User';
+    headerUserName.textContent = firstName;
     profileAuthBtn.textContent = 'Logout';
+
+    if (profileCardName) profileCardName.textContent = currentCustomer.name || 'User';
+    if (profileCardEmail) profileCardEmail.textContent = currentCustomer.email || (currentCustomer.phone ? `+91 ${currentCustomer.phone}` : 'Solar Care Customer');
+    if (profileCardStatus) profileCardStatus.textContent = currentCustomer.role === 'admin' ? 'SolWash Admin' : 'Solar Care Member';
+
+    // Ensure customer has a random avatar assigned
+    if (!currentCustomer.avatar) {
+      currentCustomer.avatar = generateRandomAvatarUrl(currentCustomer.email || currentCustomer.name);
+      localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+    }
+    updateCustomerAvatar(currentCustomer.avatar);
+
+    localStorage.setItem('solwash_onboarded', 'true');
+    document.documentElement.classList.add('no-splash');
+    const splash = document.getElementById('splash-onboarding');
+    if (splash) splash.style.display = 'none';
   } else {
     headerUserName.textContent = 'User';
     profileAuthBtn.textContent = 'Login';
+    if (profileCardName) profileCardName.textContent = 'Welcome, Guest';
+    if (profileCardEmail) profileCardEmail.textContent = 'Sign in to manage solar bookings';
+    if (profileCardStatus) profileCardStatus.textContent = 'Solar Care Guest';
+    updateCustomerAvatar(null);
   }
 }
 
@@ -1032,27 +1442,37 @@ async function loadCustomerBookings() {
   const activeList = document.getElementById('activeBookingsList');
 
   if (!authToken) {
-    emptyView.style.display = 'flex';
-    activeList.style.display = 'none';
+    if (emptyView) emptyView.style.display = 'flex';
+    if (activeList) activeList.style.display = 'none';
     return;
   }
 
   try {
-    const res = await fetch(`${API_BASE}/orders/my-orders`, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-    const result = await res.json();
+    const result = await customerApiFetch(`${API_BASE}/orders/my-orders`, { method: 'GET' });
 
-    if (res.ok && result.success && result.data.length > 0) {
+    if (result.data && result.data.length > 0) {
       customerBookingsList = result.data;
       filterBookingsList('all');
     } else {
-      emptyView.style.display = 'flex';
-      activeList.style.display = 'none';
+      customerBookingsList = [];
+      if (emptyView) emptyView.style.display = 'flex';
+      if (activeList) activeList.style.display = 'none';
     }
   } catch (err) {
-    emptyView.style.display = 'flex';
-    activeList.style.display = 'none';
+    console.error('Failed to load bookings:', err);
+    if (!err.message.includes('Session expired')) {
+      if (activeList && emptyView) {
+        emptyView.style.display = 'none';
+        activeList.style.display = 'block';
+        activeList.innerHTML = `
+          <div style="text-align: center; padding: 32px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; color: #b91c1c; margin-top: 12px;">
+            <div style="font-size: 15px; font-weight: 700; color: #991b1b;">⚠️ Failed to Fetch Bookings</div>
+            <div style="font-size: 12px; margin-top: 5px;">${err.message}</div>
+            <button type="button" onclick="loadCustomerBookings()" style="margin-top: 12px; background: #1e3a8a; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">🔄 Tap to Retry</button>
+          </div>
+        `;
+      }
+    }
   }
 }
 
@@ -1187,35 +1607,29 @@ function setupOtpAuthentication() {
       sendOtpBtn.innerHTML = 'Sending OTP...';
 
       try {
-        const res = await fetch(`${API_BASE}/auth/send-otp`, {
+        const data = await customerApiFetch(`${API_BASE}/auth/send-otp`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
 
-        const data = await res.json();
-        if (res.ok && data.success) {
-          pendingEmail = email;
-          if (sentEmailDisplay) sentEmailDisplay.textContent = email;
+        pendingEmail = email;
+        if (sentEmailDisplay) sentEmailDisplay.textContent = email;
 
-          // Switch to Step 2
-          sendOtpForm.classList.add('hidden');
-          verifyOtpForm.classList.remove('hidden');
+        // Switch to Step 2
+        sendOtpForm.classList.add('hidden');
+        verifyOtpForm.classList.remove('hidden');
 
-          // If backend provided dev/fallback OTP (e.g. SMTP not configured on server), auto-fill it
-          if (data.otp) {
-            otpCodeInput.value = data.otp;
-            showToast(`✓ OTP: ${data.otp} (Auto-filled)`);
-          } else {
-            otpCodeInput.value = '';
-            showToast(`✓ OTP code sent to ${email}. Check your email inbox!`);
-          }
-          otpCodeInput.focus();
+        // If backend provided dev/fallback OTP (e.g. SMTP not configured on server), auto-fill it
+        if (data.otp) {
+          otpCodeInput.value = data.otp;
+          showToast(`✓ OTP: ${data.otp} (Auto-filled)`);
         } else {
-          showToast(data.message || 'Failed to send OTP.');
+          otpCodeInput.value = '';
+          showToast(`✓ OTP code sent to ${email}. Check your email inbox!`);
         }
+        otpCodeInput.focus();
       } catch (err) {
-        showToast(`Connection error: ${err.message}`);
+        showToast(err.message || 'Failed to send OTP.');
       } finally {
         sendOtpBtn.disabled = false;
         sendOtpBtn.innerHTML = '<span>Send OTP Code</span>';
@@ -1238,35 +1652,29 @@ function setupOtpAuthentication() {
       verifyOtpBtn.innerHTML = 'Verifying...';
 
       try {
-        const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+        const data = await customerApiFetch(`${API_BASE}/auth/verify-otp`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: pendingEmail,
             otp
           })
         });
 
-        const data = await res.json();
-        if (res.ok && data.success) {
-          authToken = data.data.token;
-          currentCustomer = data.data.user;
-          localStorage.setItem('solwash_customer_token', authToken);
-          localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+        authToken = data.data.token;
+        currentCustomer = data.data.user;
+        localStorage.setItem('solwash_customer_token', authToken);
+        localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
 
-          updateCustomerUI();
-          showToast(`Welcome, ${currentCustomer.name}!`);
+        updateCustomerUI();
+        showToast(`Welcome, ${currentCustomer.name}!`);
 
-          // Reset OTP forms so it starts fresh on any next logout/visit
-          resetOtpForm();
+        // Reset OTP forms so it starts fresh on any next logout/visit
+        resetOtpForm();
 
-          // Redirect to Home Screen
-          showScreen('tab-home');
-        } else {
-          showToast(data.message || 'Invalid OTP code.');
-        }
+        // Redirect to Home Screen
+        showScreen('tab-home');
       } catch (err) {
-        showToast(`Verification error: ${err.message}`);
+        showToast(err.message || 'Verification failed.');
       } finally {
         verifyOtpBtn.disabled = false;
         verifyOtpBtn.innerHTML = '<span>Verify & Enter App</span>';
@@ -1289,26 +1697,21 @@ function setupOtpAuthentication() {
       if (!pendingEmail) return;
       resendOtpBtn.textContent = 'Sending...';
       try {
-        const res = await fetch(`${API_BASE}/auth/send-otp`, {
+        const data = await customerApiFetch(`${API_BASE}/auth/send-otp`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: pendingEmail })
         });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          if (data.otp) {
-            otpCodeInput.value = data.otp;
-            showToast(`✓ New OTP: ${data.otp} (Auto-filled)`);
-          } else {
-            otpCodeInput.value = '';
-            showToast(`✓ New OTP sent to ${pendingEmail}. Check your inbox!`);
-          }
-          otpCodeInput.focus();
+
+        if (data.otp) {
+          otpCodeInput.value = data.otp;
+          showToast(`✓ New OTP: ${data.otp} (Auto-filled)`);
         } else {
-          showToast(data.message || 'Failed to resend OTP.');
+          otpCodeInput.value = '';
+          showToast(`✓ New OTP sent to ${pendingEmail}. Check your inbox!`);
         }
+        otpCodeInput.focus();
       } catch (err) {
-        showToast('Error resending OTP.');
+        showToast(err.message || 'Error resending OTP.');
       } finally {
         resendOtpBtn.textContent = 'Resend OTP';
       }
@@ -1316,7 +1719,8 @@ function setupOtpAuthentication() {
   }
 
   // ----------------------------------------------------
-  // DIRECT GOOGLE LOGIN CLICK HANDLERS
+  // ----------------------------------------------------
+  // DIRECT GOOGLE LOGIN CLICK HANDLER
   // ----------------------------------------------------
   const googleBtn = document.getElementById('googleDirectLoginBtn');
 
@@ -1352,7 +1756,7 @@ function setupOtpAuthentication() {
 
   // Initialize and Render Official Google GSI Button if supported in environment
   function setupGoogleSignIn() {
-    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+    if (GOOGLE_CLIENT_ID && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
       try {
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
@@ -1407,24 +1811,13 @@ function setupOtpAuthentication() {
     }
   }
 
-  // Attach click to Google Button (Direct OAuth flow works 100% on both Web and Android APK!)
+  // Attach click to Google Button (Direct Full-page redirect without popup!)
   if (googleBtn) {
     googleBtn.addEventListener('click', () => {
-      showToast('Opening Google Sign-In...');
-      const isAndroidApp = window.location.href.includes('androidplatform.net') || navigator.userAgent.includes('Android');
-      const authUrl = `${API_BASE}/auth/google/login?platform=${isAndroidApp ? 'app' : 'web'}`;
-
-      if (isAndroidApp) {
-        // In Android WebView, this triggers shouldOverrideUrlLoading which opens real Chrome browser
-        window.location.href = authUrl;
-      } else {
-        // In desktop/browser, open popup window or navigate
-        const popup = window.open(authUrl, 'solwash_google_auth', 'width=520,height=620,status=no,toolbar=no');
-        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-          window.location.href = authUrl;
-        }
-      }
+      showToast('Connecting to Google...');
+      const returnUrl = window.location.origin;
+      const authUrl = `${API_BASE}/auth/google/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+      window.location.href = authUrl;
+    });
   }
 }
-
-

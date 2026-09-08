@@ -16,5 +16,6 @@ router.get('/google/callback', authController.googleOAuthCallback);
 // Protected routes
 router.get('/me', authenticate, authController.getProfile);
 router.put('/me', authenticate, authController.updateProfile);
+router.post('/random-avatar', authenticate, authController.randomizeAvatar);
 
 module.exports = router;

@@ -7,6 +7,23 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    (function() {
+      try {
+        var p = new URLSearchParams(window.location.search);
+        var t = p.get('token') || localStorage.getItem('solwash_customer_token');
+        if (t) {
+          // Logged in user: strictly suppress splash screen
+          document.documentElement.classList.add('no-splash');
+        }
+      } catch(e) {}
+    })();
+  </script>
+  <style>
+    .no-splash #splash-onboarding {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
 
@@ -120,14 +137,16 @@
           <div class="app-header">
             <h1 class="user-greeting">Hello, <span id="headerUserName">User</span></h1>
             <div class="header-actions">
-              <button class="icon-btn" id="notifBtn">
+              <button class="icon-btn" id="notifBtn" aria-label="Notifications" title="Notifications">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                 </svg>
+                <span class="notif-badge" id="notifBadge" style="display: none;">0</span>
               </button>
-              <div class="avatar-circle" id="profileAvatarBtn">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="#94a3b8">
+              <div class="avatar-circle" id="profileAvatarBtn" title="My Profile">
+                <img id="headerAvatarImg" src="" alt="Avatar" style="display: none; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+                <svg id="headerAvatarPlaceholder" viewBox="0 0 24 24" width="22" height="22" fill="#94a3b8">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 </svg>
               </div>
@@ -225,6 +244,29 @@
         <div id="tab-profile" class="screen-tab">
           <div class="sub-header">
             <h2>Profile</h2>
+          </div>
+
+          <!-- User Profile Card with Dynamic Avatar -->
+          <div class="profile-card" id="userProfileCard">
+            <div class="profile-avatar-wrapper">
+              <div class="profile-avatar-large" id="profileAvatarLarge">
+                <img id="profileAvatarImg" src="" alt="User Avatar" style="display: none;" />
+                <div id="profileAvatarFallback" class="profile-avatar-fallback">U</div>
+              </div>
+              <button type="button" class="btn-dice-avatar" id="btnRandomizeAvatar" title="Change Avatar (Tap to roll new random avatar)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
+              </button>
+            </div>
+            <div class="profile-card-details">
+              <h3 class="profile-user-name" id="profileCardName">User</h3>
+              <p class="profile-user-email" id="profileCardEmail">Sign in to manage solar bookings</p>
+              <div class="profile-tier-badge">
+                <span class="tier-dot"></span>
+                <span id="profileCardStatus">Solar Care Member</span>
+              </div>
+            </div>
           </div>
 
           <div class="settings-group-title">App Settings</div>
@@ -403,6 +445,44 @@
     </div>
   </div>
 
+  <!-- ORDER SUCCESS POPUP MODAL -->
+  <div id="orderSuccessModal" class="modal-overlay hidden" style="z-index: 1200;">
+    <div class="modal-card" style="text-align: center; max-width: 380px; padding: 28px 22px; border-radius: 20px;">
+      <div style="width: 76px; height: 76px; margin: 0 auto 16px; background: #ecfdf5; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #a7f3d0;">
+        <svg viewBox="0 0 24 24" width="42" height="42" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      </div>
+
+      <h3 style="font-size: 20px; color: #0f172a; margin-bottom: 8px; font-weight: 800;">Order Successful!</h3>
+      
+      <p style="font-size: 14px; color: #334155; line-height: 1.5; margin-bottom: 18px; font-weight: 500;">
+        Thank you for booking with SolWash!<br>
+        <span style="color: #0284c7; font-weight: 600;">Our agent will contact you shortly</span> to confirm your slot and details.
+      </p>
+
+      <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 14px; margin-bottom: 20px; text-align: left; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #64748b;">Order Number:</span>
+          <strong id="successOrderNum" style="color: #0f172a; font-family: monospace;">-</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span style="color: #64748b;">Amount:</span>
+          <strong id="successOrderAmount" style="color: #0f172a;">-</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #64748b;">Payment Mode:</span>
+          <span id="successOrderMode" style="font-weight: 600; text-transform: capitalize; color: #059669;">-</span>
+        </div>
+      </div>
+
+      <button type="button" id="closeSuccessModalBtn" class="btn-golden full-btn" style="height: 46px; font-size: 15px; font-weight: 700; border-radius: 10px;">
+        <span>View My Bookings</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Mobile Login Modal -->
   <div id="loginModal" class="modal-overlay hidden">
     <div class="modal-card">
@@ -451,6 +531,31 @@
         </svg>
         <span>Retry Connection</span>
       </button>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS MODAL / DRAWER -->
+  <div id="notificationsModal" class="modal-overlay hidden" style="z-index: 1200;">
+    <div class="modal-card notif-modal-card">
+      <div class="notif-modal-header">
+        <div class="notif-header-title">
+          <div class="notif-bell-icon-circle">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1e3a8a" stroke-width="2.2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </div>
+          <h3>Notifications</h3>
+          <span class="notif-count-pill" id="notifCountPill" style="display: none;">0 new</span>
+        </div>
+        <div class="notif-header-actions">
+          <button type="button" class="btn-mark-all" id="markAllReadBtn">Mark all read</button>
+          <button type="button" class="close-modal-btn" id="closeNotifModalBtn">&times;</button>
+        </div>
+      </div>
+      <div class="notif-list-container" id="notifListContainer">
+        <!-- Dynamic notifications will render here -->
+      </div>
     </div>
   </div>
 

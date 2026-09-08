@@ -15,6 +15,9 @@ function getInitialApiBase() {
   if (port === '3001' || port === '3000') {
     return `http://${hostname || 'localhost'}:5000/api`;
   }
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000/api';
+  }
   return '/api';
 }
 
@@ -102,6 +105,234 @@ const bookingForm = document.getElementById('bookingForm');
 const mobileLoginForm = document.getElementById('mobileLoginForm');
 const modalServiceTitle = document.getElementById('modalServiceTitle');
 
+// ===================================================
+// SolWash Avatar & Profile System
+// ===================================================
+const AVATAR_COLLECTIONS = ['bottts', 'avataaars', 'lorelei', 'micah', 'thumbs', 'personas'];
+const AVATAR_BG_COLORS = ['b6e3f4', 'c0aede', 'd1d4f9', 'ffd5dc', 'ffdfbf', 'd1fae5', 'fef08a'];
+
+function generateRandomAvatarUrl(seed) {
+  const s = seed ? encodeURIComponent(String(seed).trim().toLowerCase()) : `sol_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const style = AVATAR_COLLECTIONS[Math.floor(Math.random() * AVATAR_COLLECTIONS.length)];
+  const bg = AVATAR_BG_COLORS[Math.floor(Math.random() * AVATAR_BG_COLORS.length)];
+  return `https://api.dicebear.com/7.x/${style}/svg?seed=${s}&backgroundColor=${bg}`;
+}
+
+function updateCustomerAvatar(avatarUrl) {
+  const headerAvatarImg = document.getElementById('headerAvatarImg');
+  const headerAvatarPlaceholder = document.getElementById('headerAvatarPlaceholder');
+  const profileAvatarImg = document.getElementById('profileAvatarImg');
+  const profileAvatarFallback = document.getElementById('profileAvatarFallback');
+
+  if (avatarUrl) {
+    if (headerAvatarImg) {
+      headerAvatarImg.src = avatarUrl;
+      headerAvatarImg.style.display = 'block';
+      headerAvatarImg.onerror = () => {
+        headerAvatarImg.style.display = 'none';
+        if (headerAvatarPlaceholder) headerAvatarPlaceholder.style.display = 'block';
+      };
+    }
+    if (headerAvatarPlaceholder) headerAvatarPlaceholder.style.display = 'none';
+
+    if (profileAvatarImg) {
+      profileAvatarImg.src = avatarUrl;
+      profileAvatarImg.style.display = 'block';
+      profileAvatarImg.onerror = () => {
+        profileAvatarImg.style.display = 'none';
+        if (profileAvatarFallback) profileAvatarFallback.style.display = 'flex';
+      };
+    }
+    if (profileAvatarFallback) profileAvatarFallback.style.display = 'none';
+  } else {
+    if (headerAvatarImg) headerAvatarImg.style.display = 'none';
+    if (headerAvatarPlaceholder) headerAvatarPlaceholder.style.display = 'block';
+
+    if (profileAvatarImg) profileAvatarImg.style.display = 'none';
+    if (profileAvatarFallback) {
+      profileAvatarFallback.style.display = 'flex';
+      const initial = (currentCustomer && currentCustomer.name) ? currentCustomer.name.trim()[0].toUpperCase() : 'U';
+      profileAvatarFallback.textContent = initial;
+    }
+  }
+}
+
+// ===================================================
+// SolWash In-App Notification System
+// ===================================================
+let userNotifications = [];
+
+function triggerBrowserNotification(title, message) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, {
+        body: message,
+        icon: 'logo.png'
+      });
+    } catch (e) {}
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatNotifTime(dateStr) {
+  if (!dateStr) return 'Just now';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function renderNotifications(items) {
+  const container = document.getElementById('notifListContainer');
+  if (!container) return;
+
+  if (!items || items.length === 0) {
+    container.innerHTML = `
+      <div class="notif-empty-state">
+        <div class="notif-empty-icon">☀️</div>
+        <h4 style="margin: 0 0 6px; font-size: 15px; color: #0f172a;">No Notifications Yet</h4>
+        <p style="margin: 0; font-size: 13px; color: #64748b;">You are all caught up! Important updates about your bookings will appear here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const typeIcons = {
+    order: '☀️',
+    promo: '⚡',
+    system: '🔔',
+    alert: '⚠️',
+    info: 'ℹ️'
+  };
+
+  container.innerHTML = items.map(n => {
+    const icon = typeIcons[n.type] || '☀️';
+    const isUnread = !n.is_read;
+    const timeStr = formatNotifTime(n.created_at);
+
+    return `
+      <div class="notif-card ${isUnread ? 'unread' : ''}" data-id="${n.id}">
+        <div class="notif-card-icon ${n.type || 'info'}">${icon}</div>
+        <div class="notif-card-body">
+          <div class="notif-card-title">${escapeHtml(n.title)}</div>
+          <div class="notif-card-msg">${escapeHtml(n.message)}</div>
+          <div class="notif-card-time">${timeStr}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach click to mark single notification as read
+  container.querySelectorAll('.notif-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      const id = card.getAttribute('data-id');
+      if (card.classList.contains('unread')) {
+        card.classList.remove('unread');
+        if (authToken && !String(id).startsWith('guest_')) {
+          try {
+            await customerApiFetch(`${API_BASE}/notifications/${id}/read`, { method: 'PUT' });
+          } catch (e) {}
+        }
+        const unreadCards = container.querySelectorAll('.notif-card.unread').length;
+        const notifBadge = document.getElementById('notifBadge');
+        const notifCountPill = document.getElementById('notifCountPill');
+        if (notifBadge) {
+          if (unreadCards > 0) {
+            notifBadge.textContent = unreadCards > 9 ? '9+' : unreadCards;
+            notifBadge.style.display = 'flex';
+          } else {
+            notifBadge.style.display = 'none';
+          }
+        }
+        if (notifCountPill) {
+          if (unreadCards > 0) {
+            notifCountPill.textContent = `${unreadCards} new`;
+            notifCountPill.style.display = 'inline-block';
+          } else {
+            notifCountPill.style.display = 'none';
+          }
+        }
+      }
+    });
+  });
+}
+
+async function fetchNotifications() {
+  const notifBadge = document.getElementById('notifBadge');
+  const notifCountPill = document.getElementById('notifCountPill');
+
+  if (!authToken) {
+    userNotifications = [
+      {
+        id: 'guest_1',
+        title: 'Welcome to SolWash Solar Care! ☀️',
+        message: 'Sign in to schedule your first rooftop solar washing service.',
+        type: 'system',
+        is_read: 0,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 'guest_2',
+        title: 'Solar Efficiency Tip ⚡',
+        message: 'Clean solar panels generate up to 30% more clean electricity.',
+        type: 'promo',
+        is_read: 0,
+        created_at: new Date().toISOString()
+      }
+    ];
+    renderNotifications(userNotifications);
+    if (notifBadge) {
+      notifBadge.textContent = '2';
+      notifBadge.style.display = 'flex';
+    }
+    if (notifCountPill) {
+      notifCountPill.textContent = '2 new';
+      notifCountPill.style.display = 'inline-block';
+    }
+    return;
+  }
+
+  try {
+    const res = await customerApiFetch(`${API_BASE}/notifications`, { method: 'GET' });
+    if (res.success && Array.isArray(res.data)) {
+      userNotifications = res.data;
+      renderNotifications(userNotifications);
+
+      const unread = res.unreadCount !== undefined ? res.unreadCount : userNotifications.filter(n => !n.is_read).length;
+      if (notifBadge) {
+        if (unread > 0) {
+          notifBadge.textContent = unread > 9 ? '9+' : unread;
+          notifBadge.style.display = 'flex';
+        } else {
+          notifBadge.style.display = 'none';
+        }
+      }
+      if (notifCountPill) {
+        if (unread > 0) {
+          notifCountPill.textContent = `${unread} new`;
+          notifCountPill.style.display = 'inline-block';
+        } else {
+          notifCountPill.style.display = 'none';
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch notifications:', err.message);
+  }
+}
+
 // Order Success Popup Helper
 function showOrderSuccessPopup(order) {
   const successModal = document.getElementById('orderSuccessModal');
@@ -117,6 +348,13 @@ function showOrderSuccessPopup(order) {
   if (successModal) {
     successModal.classList.remove('hidden');
   }
+
+  // Trigger notification update & browser notification
+  fetchNotifications();
+  triggerBrowserNotification(
+    'Booking Confirmed! ☀️',
+    `Your solar cleaning booking ${order.order_number || ''} has been scheduled.`
+  );
 
   if (closeBtn) {
     closeBtn.onclick = () => {
@@ -173,10 +411,12 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCustomerUI();
     showScreen('tab-home');
     verifyCustomer();
+    fetchNotifications();
   } else {
     // Show OTP Login Screen behind splash screen
     showScreen('tab-login');
     updateCustomerUI();
+    fetchNotifications();
   }
 });
 
@@ -526,6 +766,88 @@ function setupEventListeners() {
   // Modal Closers
   if (closeModalBtn) closeModalBtn.addEventListener('click', () => bookingModal.classList.add('hidden'));
   if (closeLoginModalBtn) closeLoginModalBtn.addEventListener('click', () => loginModal.classList.add('hidden'));
+
+  // Notification Modal Handlers
+  const notifBtn = document.getElementById('notifBtn');
+  const notificationsModal = document.getElementById('notificationsModal');
+  const closeNotifModalBtn = document.getElementById('closeNotifModalBtn');
+  const markAllReadBtn = document.getElementById('markAllReadBtn');
+
+  if (notifBtn) {
+    notifBtn.addEventListener('click', () => {
+      if (notificationsModal) {
+        notificationsModal.classList.remove('hidden');
+      }
+      fetchNotifications();
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    });
+  }
+
+  if (closeNotifModalBtn && notificationsModal) {
+    closeNotifModalBtn.addEventListener('click', () => {
+      notificationsModal.classList.add('hidden');
+    });
+  }
+
+  if (notificationsModal) {
+    notificationsModal.addEventListener('click', (e) => {
+      if (e.target === notificationsModal) {
+        notificationsModal.classList.add('hidden');
+      }
+    });
+  }
+
+  if (markAllReadBtn) {
+    markAllReadBtn.addEventListener('click', async () => {
+      document.querySelectorAll('.notif-card.unread').forEach(c => c.classList.remove('unread'));
+      const notifBadge = document.getElementById('notifBadge');
+      const notifCountPill = document.getElementById('notifCountPill');
+      if (notifBadge) notifBadge.style.display = 'none';
+      if (notifCountPill) notifCountPill.style.display = 'none';
+
+      if (authToken) {
+        try {
+          await customerApiFetch(`${API_BASE}/notifications/mark-all-read`, { method: 'POST' });
+        } catch (e) {}
+      }
+      showToast('All notifications marked as read.');
+    });
+  }
+
+  // Header Avatar Click -> Navigate to Profile
+  const profileAvatarBtn = document.getElementById('profileAvatarBtn');
+  if (profileAvatarBtn) {
+    profileAvatarBtn.addEventListener('click', () => {
+      showScreen('tab-profile');
+    });
+  }
+
+  // Randomize Avatar Button Click
+  const btnRandomizeAvatar = document.getElementById('btnRandomizeAvatar');
+  if (btnRandomizeAvatar) {
+    btnRandomizeAvatar.addEventListener('click', async () => {
+      btnRandomizeAvatar.style.transform = 'rotate(360deg)';
+      setTimeout(() => { btnRandomizeAvatar.style.transform = ''; }, 300);
+
+      const newAvatar = generateRandomAvatarUrl(`user_${Date.now()}_${Math.random()}`);
+      if (currentCustomer) {
+        currentCustomer.avatar = newAvatar;
+        localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+      }
+      updateCustomerAvatar(newAvatar);
+      showToast('✓ New profile avatar applied!');
+
+      if (authToken) {
+        try {
+          await customerApiFetch(`${API_BASE}/auth/random-avatar`, { method: 'POST' });
+        } catch (err) {
+          console.warn('Backend avatar sync:', err.message);
+        }
+      }
+    });
+  }
 
   // GPS Location button click
   const detectLocationBtn = document.getElementById('detectLocationBtn');
@@ -1066,6 +1388,7 @@ async function verifyCustomer() {
     currentCustomer = result.data;
     localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
     updateCustomerUI();
+    fetchNotifications();
     // Ensure the screen is not showing tab-login when logged in
     const loginTab = document.getElementById('tab-login');
     if (loginTab && loginTab.classList.contains('active')) {
@@ -1077,9 +1400,26 @@ async function verifyCustomer() {
 }
 
 function updateCustomerUI() {
+  const profileCardName = document.getElementById('profileCardName');
+  const profileCardEmail = document.getElementById('profileCardEmail');
+  const profileCardStatus = document.getElementById('profileCardStatus');
+
   if (currentCustomer) {
-    headerUserName.textContent = currentCustomer.name.split(' ')[0] || 'User';
+    const firstName = currentCustomer.name.split(' ')[0] || 'User';
+    headerUserName.textContent = firstName;
     profileAuthBtn.textContent = 'Logout';
+
+    if (profileCardName) profileCardName.textContent = currentCustomer.name || 'User';
+    if (profileCardEmail) profileCardEmail.textContent = currentCustomer.email || (currentCustomer.phone ? `+91 ${currentCustomer.phone}` : 'Solar Care Customer');
+    if (profileCardStatus) profileCardStatus.textContent = currentCustomer.role === 'admin' ? 'SolWash Admin' : 'Solar Care Member';
+
+    // Ensure customer has a random avatar assigned
+    if (!currentCustomer.avatar) {
+      currentCustomer.avatar = generateRandomAvatarUrl(currentCustomer.email || currentCustomer.name);
+      localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
+    }
+    updateCustomerAvatar(currentCustomer.avatar);
+
     localStorage.setItem('solwash_onboarded', 'true');
     document.documentElement.classList.add('no-splash');
     const splash = document.getElementById('splash-onboarding');
@@ -1087,6 +1427,10 @@ function updateCustomerUI() {
   } else {
     headerUserName.textContent = 'User';
     profileAuthBtn.textContent = 'Login';
+    if (profileCardName) profileCardName.textContent = 'Welcome, Guest';
+    if (profileCardEmail) profileCardEmail.textContent = 'Sign in to manage solar bookings';
+    if (profileCardStatus) profileCardStatus.textContent = 'Solar Care Guest';
+    updateCustomerAvatar(null);
   }
 }
 
