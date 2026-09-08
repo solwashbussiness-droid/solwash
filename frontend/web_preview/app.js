@@ -7,18 +7,20 @@ function getInitialApiBase() {
   }
   if (window.SOLWASH_API_URL) return window.SOLWASH_API_URL;
   const saved = localStorage.getItem('solwash_api_url');
-  if (saved) return saved.trim().replace(/\/$/, '');
+  if (saved && (saved.startsWith('http://') || saved.startsWith('https://')) && !saved.includes('appassets.androidplatform.net')) {
+    return saved.trim().replace(/\/$/, '');
+  }
 
   const hostname = window.location.hostname;
   const port = window.location.port;
 
-  if (port === '3001' || port === '3000') {
-    return `http://${hostname || 'localhost'}:5000/api`;
+  // Local development preview only (e.g. running locally on port 3000/3001 or localhost)
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `http://${hostname}:5000/api`;
   }
-  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5000/api';
-  }
-  return '/api';
+
+  // Android APK WebView (appassets.androidplatform.net / file://) or Production Web
+  return 'https://api.solwash.in/api';
 }
 
 let API_BASE = getInitialApiBase();
