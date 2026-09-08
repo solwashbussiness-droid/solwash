@@ -16,6 +16,9 @@ const fs = require('fs');
 
 const app = express();
 
+// Trust proxy for reverse proxy setups (Nginx, HTTPS, Cloudflare)
+app.enable('trust proxy');
+
 // Middlewares
 app.use(cors());
 app.use(express.json());

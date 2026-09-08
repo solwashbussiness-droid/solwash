@@ -325,12 +325,26 @@ exports.googleLogin = async (req, res) => {
 // 4b. Web/App Google OAuth URL Redirect
 exports.googleOAuthRedirect = (req, res) => {
   try {
-    const host = req.get('host');
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const base = `${protocol}://${host}`;
-    const callbackUrl = `${base}/api/auth/google/callback`;
     const isApp = req.query.platform === 'app';
     const returnUrl = isApp ? 'solwash://auth' : (req.query.returnUrl || req.headers.referer || 'http://localhost:3001');
+
+    if (!env.GOOGLE_CLIENT_ID) {
+      return res.status(400).send(`
+        <div style="font-family:sans-serif;padding:30px;max-width:520px;margin:50px auto;border:1px solid #cbd5e1;border-radius:12px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+          <h2 style="color:#0f172a;margin-bottom:10px;">Google Client ID Not Configured</h2>
+          <p style="color:#64748b;line-height:1.5;margin-bottom:20px;">Google Sign-In requires <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> to be set in your server <code>.env</code> file.</p>
+          <a href="${returnUrl}" style="display:inline-block;padding:10px 22px;background:#1e3a8a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Return to SolWash</a>
+        </div>
+      `);
+    }
+
+    const host = req.get('host');
+    let protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+      protocol = 'https';
+    }
+    const base = `${protocol}://${host}`;
+    const callbackUrl = `${base}/api/auth/google/callback`;
 
     const stateObj = { returnUrl, callbackUrl, isApp };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
@@ -371,7 +385,10 @@ exports.googleOAuthCallback = async (req, res) => {
     }
 
     const host = req.get('host');
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    let protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+      protocol = 'https';
+    }
     const base = `${protocol}://${host}`;
     const callbackUrl = state.callbackUrl || `${base}/api/auth/google/callback`;
 
