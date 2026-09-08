@@ -24,6 +24,10 @@ const server = http.createServer((req, res) => {
   }
   let filePath = path.join(PUBLIC_DIR, pathname);
 
+  if (!path.extname(filePath) && fs.existsSync(filePath + '.html')) {
+    filePath = filePath + '.html';
+  }
+
   fs.stat(filePath, (err, stats) => {
     if (!err && stats.isDirectory()) {
       filePath = path.join(filePath, 'index.html');

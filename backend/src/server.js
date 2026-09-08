@@ -46,16 +46,25 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// Static Frontend (Admin Portal Only - Web Preview is excluded)
+// Static Frontend (Admin Portal)
 const adminDir = path.resolve(__dirname, '../../admin');
-
 if (fs.existsSync(adminDir)) {
-  // Direct root access straight to Admin Panel
   app.get('/', (req, res) => res.redirect('/admin/'));
   app.use('/admin', express.static(adminDir));
   app.get('/admin/*', (req, res) => {
     res.sendFile(path.join(adminDir, 'index.html'));
   });
+}
+
+// Legal Compliance & Policy Pages (Google Play Store & Razorpay)
+const previewDir = path.resolve(__dirname, '../../frontend/web_preview');
+if (fs.existsSync(previewDir)) {
+  app.get('/privacy', (req, res) => res.sendFile(path.join(previewDir, 'privacy.html')));
+  app.get('/privacy.html', (req, res) => res.sendFile(path.join(previewDir, 'privacy.html')));
+  app.get('/terms', (req, res) => res.sendFile(path.join(previewDir, 'terms.html')));
+  app.get('/terms.html', (req, res) => res.sendFile(path.join(previewDir, 'terms.html')));
+  app.get('/refund', (req, res) => res.sendFile(path.join(previewDir, 'refund.html')));
+  app.get('/refund.html', (req, res) => res.sendFile(path.join(previewDir, 'refund.html')));
 }
 
 // 404 Route Handler
