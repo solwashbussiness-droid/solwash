@@ -1316,10 +1316,9 @@ function setupOtpAuthentication() {
   }
 
   // ----------------------------------------------------
-  // DIRECT GOOGLE & PHONE LOGIN CLICK HANDLERS
+  // DIRECT GOOGLE LOGIN CLICK HANDLERS
   // ----------------------------------------------------
   const googleBtn = document.getElementById('googleDirectLoginBtn');
-  const phoneBtn = document.getElementById('phoneDirectLoginBtn');
 
   // Google Client ID (Optional)
   const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "";
@@ -1425,44 +1424,6 @@ function setupOtpAuthentication() {
           window.location.href = authUrl;
         }
       }
-    });
-  }
-
-  if (phoneBtn) {
-    phoneBtn.addEventListener('click', async () => {
-      const phoneNumber = prompt('Enter your 10-digit mobile number for instant login:', '9876543210');
-      if (!phoneNumber) return;
-
-      showToast('Signing in with Phone Number...');
-      try {
-        const res = await fetch(`${API_BASE}/auth/direct-login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider: 'phone',
-            phone: phoneNumber.trim(),
-            name: `User ${phoneNumber.slice(-4)}`
-          })
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          authToken = data.data.token;
-          currentCustomer = data.data.user;
-          localStorage.setItem('solwash_customer_token', authToken);
-          localStorage.setItem('solwash_customer_user', JSON.stringify(currentCustomer));
-
-          updateCustomerUI();
-          resetOtpForm();
-          showToast(`Direct Login Success!`);
-          showScreen('tab-home');
-        } else {
-          showToast(data.message || 'Phone login failed.');
-        }
-      } catch (err) {
-        showToast('Phone direct login connection failed.');
-      }
-    });
   }
 }
 
