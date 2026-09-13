@@ -1776,54 +1776,6 @@ body:has(#tab-login.active) .bottom-nav-container,
   z-index: 1;
 }
 
-/* Fixed Center Pin */
-.zomato-center-marker {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -100%);
-  pointer-events: none;
-  z-index: 450;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transition: transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.zomato-center-marker.dragging {
-  transform: translate(-50%, -125%) scale(1.08);
-}
-
-.marker-pin-tooltip {
-  background: #0f172a;
-  color: #ffffff;
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 12px;
-  white-space: nowrap;
-  margin-bottom: 2px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  letter-spacing: 0.2px;
-}
-
-.marker-pin-svg {
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
-}
-
-.marker-pin-shadow {
-  width: 14px;
-  height: 5px;
-  background: rgba(15, 23, 42, 0.35);
-  border-radius: 50%;
-  margin-top: -3px;
-  transition: transform 0.18s ease, opacity 0.18s ease;
-}
-
-.zomato-center-marker.dragging .marker-pin-shadow {
-  transform: scale(0.65);
-  opacity: 0.3;
-}
 
 /* Floating GPS Button */
 .zomato-locate-btn {
@@ -1891,8 +1843,8 @@ body:has(#tab-login.active) .bottom-nav-container,
 /* Compact Floating Zoom Controls */
 .zomato-zoom-controls {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  bottom: 12px;
+  right: 10px;
   z-index: 460;
   display: flex;
   flex-direction: column;
@@ -2412,12 +2364,16 @@ body:has(#tab-login.active) .bottom-nav-container,
   overflow: hidden;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
   border: 1.5px solid #cbd5e1;
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .modern-map-wrapper {
-  height: 190px;
+  height: 200px;
   width: 100%;
   position: relative;
+  overflow: hidden;
 }
 
 .modern-map-wrapper .zomato-map {
@@ -2486,11 +2442,12 @@ body:has(#tab-login.active) .bottom-nav-container,
   display: flex;
   flex-direction: column;
   align-items: center;
+  will-change: transform;
   transition: transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .zomato-center-marker.dragging {
-  transform: translate(-50%, -125%) scale(1.1);
+  transform: translate(-50%, -125%) scale(1.08);
 }
 
 .marker-pin-tooltip {
@@ -2505,9 +2462,12 @@ body:has(#tab-login.active) .bottom-nav-container,
   margin-bottom: 2px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   letter-spacing: 0.2px;
+  user-select: none;
+  line-height: 1.2;
 }
 
 .marker-pin-svg {
+  display: block;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
 }
 
@@ -2737,10 +2697,11 @@ body:has(#tab-login.active) .bottom-nav-container,
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px 0 4px;
-  margin-top: 6px;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  margin: 14px -18px -20px -18px;
   border-top: 1.5px solid #f1f5f9;
-  z-index: 10;
+  box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.08);
+  z-index: 1000;
 }
 
 .checkout-price-col {
