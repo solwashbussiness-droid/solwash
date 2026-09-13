@@ -924,6 +924,11 @@ function setupEventListeners() {
         document.getElementById('bookAddress').value = address;
       }
 
+      if (!date || date < getLocalDateString()) {
+        showToast('Past dates cannot be selected. Please choose today or a future date.');
+        return;
+      }
+
       if (!houseNo) {
         showToast('Please enter House / Flat No.');
         return;
@@ -1147,12 +1152,21 @@ function setupEventListeners() {
     });
   }
 
+  // Helper to get local date string YYYY-MM-DD
+  function getLocalDateString(d = new Date()) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   // Set default booking date to tomorrow
   const bookDateInput = document.getElementById('bookDate');
   if (bookDateInput) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    bookDateInput.value = tomorrow.toISOString().split('T')[0];
+    bookDateInput.min = getLocalDateString();
+    bookDateInput.value = getLocalDateString(tomorrow);
   }
 }
 
@@ -1167,7 +1181,10 @@ function setupEventListeners() {
   function updateSlotDate(offset, slotVal) {
     const d = new Date();
     d.setDate(d.getDate() + offset);
-    if (bookDateInputElem) bookDateInputElem.value = d.toISOString().split('T')[0];
+    if (bookDateInputElem) {
+      bookDateInputElem.min = getLocalDateString();
+      bookDateInputElem.value = getLocalDateString(d);
+    }
     if (bookSlotInputElem) bookSlotInputElem.value = slotVal;
     if (customDateText) customDateText.textContent = 'Pick Date';
     if (customTimePickerRow) customTimePickerRow.style.display = 'none';
@@ -1186,17 +1203,24 @@ function setupEventListeners() {
 
   // Set min date on date input to today
   if (bookDateInputElem) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     bookDateInputElem.min = today;
 
     const handleCustomDateChange = () => {
       const val = bookDateInputElem.value;
       if (!val) return;
 
+      const today = getLocalDateString();
+      if (val < today) {
+        showToast('Past dates cannot be selected. Setting to today.');
+        bookDateInputElem.value = today;
+      }
+
+      const activeVal = bookDateInputElem.value;
       slotPills.forEach(p => p.classList.remove('active'));
       if (customDateBtn) customDateBtn.classList.add('active');
 
-      const parts = val.split('-');
+      const parts = activeVal.split('-');
       if (parts.length === 3) {
         const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1284,11 +1308,14 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
   }
 
   // Set default booking date to tomorrow and default slot to 09:00 AM - 11:00 AM
+  const todayStr = getLocalDateString();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = getLocalDateString(tomorrow);
   const dateInput = document.getElementById('bookDate');
   if (dateInput) {
-    dateInput.value = tomorrow.toISOString().split('T')[0];
+    dateInput.min = todayStr;
+    dateInput.value = tomorrowStr;
   }
   const slotInput = document.getElementById('bookSlot');
   if (slotInput) {
