@@ -39,6 +39,21 @@ try {
 let currentSelectedService = null;
 let availableServices = [];
 
+// Leaflet Map state for Booking Modal (Zomato Center-Pin Style)
+let bookingMap = null;
+let reverseGeocodeTimer = null;
+let currentMapMode = 'satellite'; // 'satellite' or 'streets'
+let satelliteTileLayer = null;
+let streetTileLayer = null;
+
+// Helper to get local date string YYYY-MM-DD
+function getLocalDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function handleCustomerSessionExpired() {
   if (authToken) {
     authToken = '';
@@ -1167,14 +1182,6 @@ function setupEventListeners() {
     });
   }
 
-  // Helper to get local date string YYYY-MM-DD
-  function getLocalDateString(d = new Date()) {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
   // Set default booking date to tomorrow
   const bookDateInput = document.getElementById('bookDate');
   if (bookDateInput) {
@@ -1435,13 +1442,6 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
     initOrUpdateBookingMap(28.6139, 77.2090, 15);
   }
 }
-
-// Leaflet Map instance variables for Booking Modal (Zomato Center-Pin Style)
-let bookingMap = null;
-let reverseGeocodeTimer = null;
-let currentMapMode = 'satellite'; // 'satellite' or 'streets'
-let satelliteTileLayer = null;
-let streetTileLayer = null;
 
 function getSatelliteLayer() {
   if (!satelliteTileLayer) {
