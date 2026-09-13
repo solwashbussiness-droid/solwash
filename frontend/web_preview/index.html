@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SolWash - Solar Care App</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
@@ -391,20 +392,89 @@
           </select>
         </div>
 
-        <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <label style="margin-bottom: 0;">Rooftop / Service Address *</label>
-            <button type="button" id="detectLocationBtn" class="btn-location-gps">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
-                <circle cx="12" cy="12" r="7"></circle>
-                <circle cx="12" cy="12" r="3"></circle>
+        <!-- ZOMATO-STYLE DOORSTEP LOCATION SECTION -->
+        <div class="form-group location-group-zomato">
+          <div class="location-header-row">
+            <label class="form-label-bold">Service & Rooftop Location *</label>
+            <span class="location-accuracy-pill" id="locationAccuracyPill">📍 Move map to roof</span>
+          </div>
+
+          <!-- Zomato Center-Pin Map Box -->
+          <div id="bookingMapContainer" class="zomato-map-wrapper">
+            <div id="bookingMap" class="zomato-map"></div>
+
+            <!-- Compact Zoom In / Out Controls -->
+            <div class="zomato-zoom-controls">
+              <button type="button" class="zomato-zoom-btn" onclick="bookingMapZoom(1)" title="Zoom in to rooftop">+</button>
+              <button type="button" class="zomato-zoom-btn" onclick="bookingMapZoom(-1)" title="Zoom out">-</button>
+            </div>
+
+            <!-- Floating Satellite Mode Toggle Button -->
+            <button type="button" id="toggleMapLayerBtn" class="zomato-layer-btn" title="Toggle Satellite / Normal Map" onclick="toggleMapTileLayer()">
+              <span id="layerBtnIcon">🗺️</span>
+              <span id="layerBtnText">Map View</span>
+            </button>
+
+            <!-- Fixed Center Pin (stays centered while map pans) -->
+            <div class="zomato-center-marker" id="zomatoCenterMarker">
+              <div class="marker-pin-tooltip" id="markerPinTooltip">Point to exact roof</div>
+              <svg class="marker-pin-svg" viewBox="0 0 384 512" width="28" height="38">
+                <path fill="#ef4444" d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.773-39.464 0z"/>
+                <circle cx="192" cy="192" r="75" fill="#ffffff"/>
+                <circle cx="192" cy="192" r="45" fill="#1e3a8a"/>
               </svg>
-              <span>Current Location</span>
+              <div class="marker-pin-shadow"></div>
+            </div>
+
+            <!-- Floating "Locate Me" GPS button -->
+            <button type="button" id="detectLocationBtn" class="zomato-locate-btn" title="Use current GPS location" onclick="detectCurrentLocation(true)">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="9"></circle>
+                <line x1="12" y1="2" x2="12" y2="5"></line>
+                <line x1="12" y1="19" x2="12" y2="22"></line>
+                <line x1="2" y1="12" x2="5" y2="12"></line>
+                <line x1="19" y1="12" x2="22" y2="12"></line>
+                <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+              </svg>
+              <span>Current GPS</span>
             </button>
           </div>
+
+          <!-- Detected Area Bar -->
+          <div class="zomato-detected-bar">
+            <div class="detected-icon">📍</div>
+            <div class="detected-content">
+              <span class="detected-title">Selected Rooftop Area</span>
+              <span class="detected-text" id="detectedAreaText">Pan map to place pin on your rooftop</span>
+            </div>
+          </div>
+
           <div id="locationStatusBadge" class="location-status-badge hidden"></div>
-          <textarea id="bookAddress" rows="2" placeholder="House/Building No., Street, Landmark, City" required></textarea>
+
+          <!-- Structured Doorstep Address Fields -->
+          <div class="doorstep-fields-container">
+            <div class="doorstep-field-row">
+              <div class="doorstep-input-wrap">
+                <span class="doorstep-icon">🏠</span>
+                <input type="text" id="doorstepHouseNo" placeholder="House / Flat / Floor No. *" required>
+              </div>
+            </div>
+            <div class="doorstep-field-row">
+              <div class="doorstep-input-wrap">
+                <span class="doorstep-icon">🏢</span>
+                <input type="text" id="doorstepLandmark" placeholder="Apartment / Building / Landmark *" required>
+              </div>
+            </div>
+            <div class="doorstep-field-row">
+              <div class="doorstep-input-wrap">
+                <span class="doorstep-icon">☀️</span>
+                <input type="text" id="doorstepRooftopNote" placeholder="Rooftop / Water Access details (e.g. 3rd floor, stairs on left)">
+              </div>
+            </div>
+          </div>
+
+          <!-- Hidden inputs for backward compatibility -->
+          <textarea id="bookAddress" style="display: none;"></textarea>
           <input type="hidden" id="bookLatitude" value="">
           <input type="hidden" id="bookLongitude" value="">
         </div>
@@ -572,6 +642,7 @@
   <!-- Toast notification -->
   <div id="toast" class="toast"></div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

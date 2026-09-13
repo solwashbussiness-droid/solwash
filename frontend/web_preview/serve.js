@@ -4,6 +4,7 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3001;
 const PUBLIC_DIR = __dirname;
+const BACKEND_TARGET_PORT = process.env.BACKEND_PORT || 5000;
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -18,6 +19,33 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
+  // 1. Proxy /api requests to backend
+  if (req.url.startsWith('/api')) {
+    const proxyReq = http.request({
+      hostname: '127.0.0.1',
+      port: BACKEND_TARGET_PORT,
+      path: req.url,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: `127.0.0.1:${BACKEND_TARGET_PORT}`
+      }
+    }, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res, { end: true });
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error('[Proxy Error]', err.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Backend service unreachable', details: err.message }));
+    });
+
+    req.pipe(proxyReq, { end: true });
+    return;
+  }
+
+  // 2. Serve static files
   let pathname = req.url.split('?')[0];
   if (!pathname || pathname === '/') {
     pathname = '/index.html';
@@ -45,6 +73,6 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Solar Care Mobile Web Preview running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Solar Care Mobile Web Preview running on http://0.0.0.0:${PORT}`);
 });

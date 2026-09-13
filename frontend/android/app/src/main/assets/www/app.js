@@ -14,9 +14,9 @@ function getInitialApiBase() {
   const hostname = window.location.hostname;
   const port = window.location.port;
 
-  // Local development preview only (e.g. running locally on port 3000/3001 or localhost)
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `http://${hostname}:5000/api`;
+  // Local development preview, LAN IP, or tunnel preview (proxied by serve.js)
+  if (hostname !== 'appassets.androidplatform.net' && !hostname.endsWith('solwash.in')) {
+    return '/api';
   }
 
   // Android APK WebView (appassets.androidplatform.net / file://) or Production Web
@@ -897,11 +897,37 @@ function setupEventListeners() {
       e.preventDefault();
       const date = document.getElementById('bookDate').value;
       const slot = document.getElementById('bookSlot').value;
-      const address = document.getElementById('bookAddress').value.trim();
       const rawPhone = document.getElementById('bookPhone').value.trim();
       const latitude = document.getElementById('bookLatitude').value;
       const longitude = document.getElementById('bookLongitude').value;
       const paymentMode = selectedPaymentModeInput ? selectedPaymentModeInput.value : 'razorpay';
+
+      // Assemble structured Zomato-style doorstep address
+      const houseNo = document.getElementById('doorstepHouseNo') ? document.getElementById('doorstepHouseNo').value.trim() : '';
+      const landmark = document.getElementById('doorstepLandmark') ? document.getElementById('doorstepLandmark').value.trim() : '';
+      const rooftopNote = document.getElementById('doorstepRooftopNote') ? document.getElementById('doorstepRooftopNote').value.trim() : '';
+      const detectedArea = document.getElementById('detectedAreaText') ? document.getElementById('detectedAreaText').textContent.trim() : '';
+
+      let address = '';
+      if (houseNo || landmark) {
+        const parts = [];
+        if (houseNo) parts.push(houseNo);
+        if (landmark) parts.push(landmark);
+        if (detectedArea && !detectedArea.includes('Pan map')) parts.push(detectedArea);
+        if (rooftopNote) parts.push(`[Access: ${rooftopNote}]`);
+        address = parts.join(', ');
+      } else {
+        address = document.getElementById('bookAddress') ? document.getElementById('bookAddress').value.trim() : '';
+      }
+
+      if (document.getElementById('bookAddress')) {
+        document.getElementById('bookAddress').value = address;
+      }
+
+      if (!houseNo || !landmark) {
+        showToast('Please enter House/Flat No. and Landmark.');
+        return;
+      }
 
       if (!authToken) {
         bookingModal.classList.add('hidden');
@@ -1172,105 +1198,312 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
     bookDateInput.value = tomorrow.toISOString().split('T')[0];
   }
 
-  // Trigger location detection on opening booking modal
-  detectCurrentLocation(false);
+  // Trigger map & location detection on opening booking modal
+  const existingLat = document.getElementById('bookLatitude') ? document.getElementById('bookLatitude').value : null;
+  const existingLng = document.getElementById('bookLongitude') ? document.getElementById('bookLongitude').value : null;
+  if (existingLat && existingLng) {
+    initOrUpdateBookingMap(parseFloat(existingLat), parseFloat(existingLng), 17);
+  } else {
+    initOrUpdateBookingMap(28.6139, 77.2090, 14);
+  }
+  const statusBadge = document.getElementById('locationStatusBadge');
+  if (statusBadge && !existingLat) {
+    statusBadge.classList.remove('hidden');
+    statusBadge.className = 'location-status-badge info';
+    statusBadge.innerHTML = `<span>📍 Click <b>"Current Location"</b> to grant permission and find exact rooftop</span>`;
+  }
 }
 
-// Geolocation detection
-async function detectCurrentLocation(userInitiated = true) {
-  const statusBadge = document.getElementById('locationStatusBadge');
-  const addressInput = document.getElementById('bookAddress');
+// Leaflet Map instance variables for Booking Modal (Zomato Center-Pin Style)
+let bookingMap = null;
+let reverseGeocodeTimer = null;
+let currentMapMode = 'satellite'; // 'satellite' or 'streets'
+let satelliteTileLayer = null;
+let streetTileLayer = null;
+
+function getSatelliteLayer() {
+  if (!satelliteTileLayer) {
+    // High-resolution Google Hybrid Satellite (Rooftop photography + street & landmark labels)
+    satelliteTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      subdomains: ['0', '1', '2', '3'],
+      attribution: 'Google'
+    });
+  }
+  return satelliteTileLayer;
+}
+
+function getStreetLayer() {
+  if (!streetTileLayer) {
+    streetTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: 'OSM'
+    });
+  }
+  return streetTileLayer;
+}
+
+function toggleMapTileLayer() {
+  if (!bookingMap) return;
+  const btnIcon = document.getElementById('layerBtnIcon');
+  const btnText = document.getElementById('layerBtnText');
+
+  if (currentMapMode === 'satellite') {
+    if (satelliteTileLayer) bookingMap.removeLayer(satelliteTileLayer);
+    const streets = getStreetLayer();
+    streets.addTo(bookingMap);
+    currentMapMode = 'streets';
+    if (btnIcon) btnIcon.textContent = '🛰️';
+    if (btnText) btnText.textContent = 'Satellite';
+  } else {
+    if (streetTileLayer) bookingMap.removeLayer(streetTileLayer);
+    const sat = getSatelliteLayer();
+    sat.addTo(bookingMap);
+    currentMapMode = 'satellite';
+    if (btnIcon) btnIcon.textContent = '🗺️';
+    if (btnText) btnText.textContent = 'Map View';
+  }
+}
+window.toggleMapTileLayer = toggleMapTileLayer;
+
+function bookingMapZoom(delta) {
+  if (!bookingMap) return;
+  if (delta > 0) {
+    bookingMap.zoomIn();
+  } else {
+    bookingMap.zoomOut();
+  }
+}
+window.bookingMapZoom = bookingMapZoom;
+
+// Initialize or re-center Interactive Rooftop Map Picker
+function initOrUpdateBookingMap(lat, lng, zoom = 18) {
+  if (typeof L === 'undefined') return;
+  const mapElement = document.getElementById('bookingMap');
+  if (!mapElement) return;
+
+  const validLat = Number(lat) || 28.6139;
+  const validLng = Number(lng) || 77.2090;
+
+  try {
+    if (!bookingMap) {
+      bookingMap = L.map('bookingMap', {
+        zoomControl: false, // Clean UI with custom compact zoom buttons
+        attributionControl: false,
+        maxZoom: 21
+      }).setView([validLat, validLng], zoom);
+
+      // Default directly to Satellite view for clear rooftop visibility
+      const sat = getSatelliteLayer();
+      sat.addTo(bookingMap);
+      currentMapMode = 'satellite';
+
+      const btnIcon = document.getElementById('layerBtnIcon');
+      const btnText = document.getElementById('layerBtnText');
+      if (btnIcon) btnIcon.textContent = '🗺️';
+      if (btnText) btnText.textContent = 'Map View';
+
+      // Zomato Center-Pin Animation Handlers
+      const centerMarker = document.getElementById('zomatoCenterMarker');
+      const markerTooltip = document.getElementById('markerPinTooltip');
+
+      bookingMap.on('movestart', function () {
+        if (centerMarker) centerMarker.classList.add('dragging');
+        if (markerTooltip) markerTooltip.textContent = 'Locating rooftop...';
+      });
+
+      bookingMap.on('moveend', function () {
+        if (centerMarker) centerMarker.classList.remove('dragging');
+        if (markerTooltip) markerTooltip.textContent = 'Rooftop Set ✓';
+        const center = bookingMap.getCenter();
+        onMapLocationSelected(center.lat, center.lng);
+      });
+    } else {
+      bookingMap.setView([validLat, validLng], zoom);
+    }
+
+    // Force Leaflet recalculation once modal DOM is fully visible
+    setTimeout(() => {
+      if (bookingMap) {
+        bookingMap.invalidateSize();
+        const center = bookingMap.getCenter();
+        onMapLocationSelected(center.lat, center.lng);
+      }
+    }, 250);
+  } catch (err) {
+    console.warn('Map initialization note:', err);
+  }
+}
+
+// Handle Map Center position update
+function onMapLocationSelected(lat, lng) {
   const latInput = document.getElementById('bookLatitude');
   const lngInput = document.getElementById('bookLongitude');
+  const detectedAreaText = document.getElementById('detectedAreaText');
+  const accuracyPill = document.getElementById('locationAccuracyPill');
+
+  const validLat = parseFloat(Number(lat).toFixed(6));
+  const validLng = parseFloat(Number(lng).toFixed(6));
+
+  if (latInput) latInput.value = validLat;
+  if (lngInput) lngInput.value = validLng;
+
+  if (accuracyPill) {
+    accuracyPill.textContent = `📍 ${validLat.toFixed(4)}, ${validLng.toFixed(4)}`;
+  }
+
+  // Reverse geocode with debounce to update detected locality bar
+  if (reverseGeocodeTimer) clearTimeout(reverseGeocodeTimer);
+  reverseGeocodeTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${validLat}&lon=${validLng}&zoom=18&addressdetails=1`);
+      if (res.ok) {
+        const geoData = await res.json();
+        if (geoData && geoData.display_name && detectedAreaText) {
+          detectedAreaText.textContent = geoData.display_name;
+
+          // Also populate bookAddress hidden field
+          const addressInput = document.getElementById('bookAddress');
+          if (addressInput) addressInput.value = geoData.display_name;
+
+          // If landmark is still empty, prefill with neighbourhood/suburb
+          const landmarkInput = document.getElementById('doorstepLandmark');
+          if (landmarkInput && !landmarkInput.value && geoData.address) {
+            const roadOrSuburb = geoData.address.road || geoData.address.suburb || geoData.address.neighbourhood || '';
+            if (roadOrSuburb) landmarkInput.placeholder = `e.g. Near ${roadOrSuburb}`;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Reverse geocode error:', err);
+      if (detectedAreaText) {
+        detectedAreaText.textContent = `Coordinates: ${validLat}, ${validLng}`;
+      }
+    }
+  }, 300);
+}
+
+// Geolocation detection with native browser permission request
+async function detectCurrentLocation(userInitiated = true) {
+  const statusBadge = document.getElementById('locationStatusBadge');
   const detectBtn = document.getElementById('detectLocationBtn');
 
   if (!navigator.geolocation) {
-    if (userInitiated) {
-      showToast('Geolocation is not supported by your browser.');
+    showToast('Geolocation is not supported by your browser.');
+    if (statusBadge) {
+      statusBadge.classList.remove('hidden');
+      statusBadge.className = 'location-status-badge warning';
+      statusBadge.innerHTML = `<span>⚠️ Geolocation not supported by your browser. Please drag the pin on map.</span>`;
     }
     return;
   }
 
+  // If Permissions API is available, check if user has previously blocked location
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const perm = await navigator.permissions.query({ name: 'geolocation' });
+      if (perm.state === 'denied') {
+        if (statusBadge) {
+          statusBadge.classList.remove('hidden');
+          statusBadge.className = 'location-status-badge warning';
+          statusBadge.innerHTML = `<span>🔒 Location permission is blocked. Click the lock icon in the URL bar to Allow, or drag pin on map.</span>`;
+        }
+        showToast('Location permission is blocked! Please allow it from the address bar icon.');
+        if (detectBtn) {
+          detectBtn.disabled = false;
+          detectBtn.innerHTML = `<span>GPS</span>`;
+        }
+        return;
+      }
+    }
+  } catch (_) {}
+
+  // Update UI to show permission request state
+  if (detectBtn) {
+    detectBtn.disabled = true;
+    detectBtn.innerHTML = `<span>⏳ Locating...</span>`;
+  }
   if (statusBadge) {
     statusBadge.classList.remove('hidden');
     statusBadge.className = 'location-status-badge info';
-    statusBadge.innerHTML = `<span>⏳ Detecting GPS location... please allow location permission</span>`;
+    statusBadge.innerHTML = `<span>🔔 <b>Permission Prompt:</b> Please click <b>"Allow"</b> in your browser to detect exact rooftop...</span>`;
   }
-  if (detectBtn) {
-    detectBtn.disabled = true;
-    detectBtn.innerHTML = `<span>Detecting...</span>`;
+  if (userInitiated) {
+    showToast('Please click "Allow" on your browser permission prompt');
   }
 
+  // Request browser location permission and acquire exact GPS coordinates
   navigator.geolocation.getCurrentPosition(
-    async (position) => {
+    (position) => {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
-      const accuracy = Math.round(position.coords.accuracy);
+      const accuracy = Math.round(position.coords.accuracy || 10);
 
-      if (latInput) latInput.value = lat;
-      if (lngInput) lngInput.value = lng;
+      const validLat = parseFloat(Number(lat).toFixed(6));
+      const validLng = parseFloat(Number(lng).toFixed(6));
 
-      if (statusBadge) {
-        statusBadge.classList.remove('hidden');
-        statusBadge.className = 'location-status-badge success';
-        statusBadge.innerHTML = `<span>📍 GPS Acquired (±${accuracy}m) • Resolving address...</span>`;
+      // Pan and zoom map directly to exact rooftop (Zomato style with high-res rooftop view)
+      if (bookingMap) {
+        bookingMap.setView([validLat, validLng], 19, { animate: true });
+      } else {
+        initOrUpdateBookingMap(validLat, validLng, 19);
       }
+
       if (detectBtn) {
         detectBtn.disabled = false;
-        detectBtn.innerHTML = `<span>📍 GPS Acquired</span>`;
+        detectBtn.innerHTML = `<span>✓ GPS</span>`;
+      }
+      if (statusBadge) {
+        statusBadge.className = 'location-status-badge success';
+        statusBadge.innerHTML = `<span>📍 Exact Rooftop GPS (±${accuracy}m): ${validLat.toFixed(5)}, ${validLng.toFixed(5)}</span>`;
       }
 
-      // Reverse geocode with OpenStreetMap Nominatim
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
-          headers: { 'Accept-Language': 'en' }
-        });
-        if (res.ok) {
-          const geoData = await res.json();
-          if (geoData && geoData.display_name && addressInput) {
-            addressInput.value = geoData.display_name;
-            if (statusBadge) {
-              statusBadge.innerHTML = `<span>📍 Exact Rooftop Location Detected</span>`;
+      showToast('✓ Location permission granted! Exact rooftop acquired.');
+    },
+    async (error) => {
+      if (detectBtn) {
+        detectBtn.disabled = false;
+        detectBtn.innerHTML = `<span>GPS</span>`;
+      }
+
+      if (error.code === error.PERMISSION_DENIED) {
+        if (statusBadge) {
+          statusBadge.classList.remove('hidden');
+          statusBadge.className = 'location-status-badge warning';
+          statusBadge.innerHTML = `<span>⚠️ Permission denied. Click 🔒 in address bar to Allow, or drag map to roof.</span>`;
+        }
+        showToast('Location permission was denied. You can pan the map manually.');
+      } else {
+        if (statusBadge) {
+          statusBadge.classList.remove('hidden');
+          statusBadge.className = 'location-status-badge warning';
+          statusBadge.innerHTML = `<span>⚠️ GPS signal weak. Pan the map to position the pin on your rooftop.</span>`;
+        }
+        showToast('GPS unavailable. Please pan the map to your rooftop.');
+
+        // Network fallback to assist user in centering map near their city
+        try {
+          const geoRes = await fetch('https://ipwho.is/').then(r => r.json()).catch(() => null);
+          if (geoRes && geoRes.success && geoRes.latitude && geoRes.longitude) {
+            if (bookingMap) {
+              bookingMap.setView([geoRes.latitude, geoRes.longitude], 15, { animate: true });
+            } else {
+              initOrUpdateBookingMap(geoRes.latitude, geoRes.longitude, 15);
             }
           }
-        }
-      } catch (err) {
-        console.warn('Reverse geocoding fetch error:', err);
-        if (addressInput && !addressInput.value) {
-          addressInput.value = `Latitude: ${lat.toFixed(6)}, Longitude: ${lng.toFixed(6)}`;
-        }
-      }
-      if (userInitiated) {
-        showToast('Current location detected successfully!');
-      }
-    },
-    (error) => {
-      if (detectBtn) {
-        detectBtn.disabled = false;
-        detectBtn.innerHTML = `<span>📍 Current Location</span>`;
-      }
-      if (statusBadge) {
-        if (error.code === error.PERMISSION_DENIED) {
-          statusBadge.classList.remove('hidden');
-          statusBadge.className = 'location-status-badge warning';
-          statusBadge.innerHTML = `<span>⚠️ Location permission denied. Please enter address manually.</span>`;
-          if (userInitiated) {
-            showToast('Location permission denied. Please enter address manually.');
-          }
-        } else {
-          statusBadge.classList.remove('hidden');
-          statusBadge.className = 'location-status-badge warning';
-          statusBadge.innerHTML = `<span>⚠️ Unable to retrieve GPS position. Please enter address manually.</span>`;
-        }
+        } catch (_) {}
       }
     },
     {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 25000,
       maximumAge: 0
     }
   );
 }
+
+// Expose globally for inline onclick
+window.detectCurrentLocation = detectCurrentLocation;
 
 async function loadPublicServices() {
   const container = document.getElementById('servicesListContainer');
