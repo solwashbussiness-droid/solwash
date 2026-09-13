@@ -2278,10 +2278,78 @@ body:has(#tab-login.active) .bottom-nav-container,
 .slot-pill.custom-date-pill {
   border-style: dashed;
   border-color: #cbd5e1;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
 }
 
 .slot-pill.custom-date-pill:hover {
   border-color: #f5a623;
+}
+
+.native-date-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.001;
+  cursor: pointer;
+  z-index: 10;
+  border: none;
+  background: transparent;
+}
+
+/* Custom Time Selection Row */
+.custom-time-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px dashed #f5a623;
+  border-radius: 12px;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.custom-time-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #78350f;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.custom-time-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.time-chip {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.time-chip:hover {
+  border-color: #f5a623;
+  color: #0f172a;
+}
+
+.time-chip.active {
+  background: #121d33;
+  color: #ffffff;
+  border-color: #f5a623;
+  box-shadow: 0 2px 6px rgba(18, 29, 51, 0.2);
 }
 
 /* 3. Rooftop Map Card & Section */

@@ -409,11 +409,23 @@
             </div>
             <div class="slot-pill custom-date-pill" id="customDatePillBtn">
               <span class="slot-day">📅 Custom</span>
-              <span class="slot-time">Pick Date</span>
+              <span class="slot-time" id="customDateText">Pick Date</span>
+              <input type="date" id="bookDate" required class="native-date-overlay" aria-label="Select custom booking date">
             </div>
           </div>
-          <!-- Hidden inputs for backward compatibility -->
-          <input type="date" id="bookDate" required style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;">
+
+          <!-- Preferred time chips when custom date is chosen -->
+          <div class="custom-time-row" id="customTimePickerRow" style="display: none;">
+            <span class="custom-time-label">Preferred Time Slot:</span>
+            <div class="custom-time-chips">
+              <span class="time-chip active" data-time="09:00 AM - 11:00 AM">9 - 11 AM</span>
+              <span class="time-chip" data-time="11:00 AM - 01:00 PM">11 - 1 PM</span>
+              <span class="time-chip" data-time="02:00 PM - 04:00 PM">2 - 4 PM</span>
+              <span class="time-chip" data-time="04:00 PM - 06:00 PM">4 - 6 PM</span>
+            </div>
+          </div>
+
+          <!-- Hidden select for backward compatibility -->
           <select id="bookSlot" required style="display: none;">
             <option value="09:00 AM - 11:00 AM">09:00 AM - 11:00 AM (Morning)</option>
             <option value="11:00 AM - 01:00 PM">11:00 AM - 01:00 PM (Noon)</option>

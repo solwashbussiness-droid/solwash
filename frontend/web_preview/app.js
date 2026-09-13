@@ -1158,6 +1158,9 @@ function setupEventListeners() {
 
   // Quick Slot Chips Selection Handlers
   const slotPills = document.querySelectorAll('.slot-pill[data-date-offset]');
+  const customDateBtn = document.getElementById('customDatePillBtn');
+  const customDateText = document.getElementById('customDateText');
+  const customTimePickerRow = document.getElementById('customTimePickerRow');
   const bookDateInputElem = document.getElementById('bookDate');
   const bookSlotInputElem = document.getElementById('bookSlot');
 
@@ -1166,11 +1169,14 @@ function setupEventListeners() {
     d.setDate(d.getDate() + offset);
     if (bookDateInputElem) bookDateInputElem.value = d.toISOString().split('T')[0];
     if (bookSlotInputElem) bookSlotInputElem.value = slotVal;
+    if (customDateText) customDateText.textContent = 'Pick Date';
+    if (customTimePickerRow) customTimePickerRow.style.display = 'none';
   }
 
   slotPills.forEach(pill => {
     pill.addEventListener('click', () => {
       slotPills.forEach(p => p.classList.remove('active'));
+      if (customDateBtn) customDateBtn.classList.remove('active');
       pill.classList.add('active');
       const offset = parseInt(pill.dataset.dateOffset, 10) || 1;
       const slotVal = pill.dataset.slot || '09:00 AM - 11:00 AM';
@@ -1178,16 +1184,70 @@ function setupEventListeners() {
     });
   });
 
-  const customDateBtn = document.getElementById('customDatePillBtn');
+  // Set min date on date input to today
+  if (bookDateInputElem) {
+    const today = new Date().toISOString().split('T')[0];
+    bookDateInputElem.min = today;
+
+    const handleCustomDateChange = () => {
+      const val = bookDateInputElem.value;
+      if (!val) return;
+
+      slotPills.forEach(p => p.classList.remove('active'));
+      if (customDateBtn) customDateBtn.classList.add('active');
+
+      const parts = val.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const formatted = `${d.getDate()} ${months[d.getMonth()]}`;
+        if (customDateText) {
+          customDateText.textContent = formatted;
+        }
+      }
+
+      if (customTimePickerRow) {
+        customTimePickerRow.style.display = 'flex';
+      }
+
+      // Default slot if none set
+      if (bookSlotInputElem && !bookSlotInputElem.value) {
+        bookSlotInputElem.value = '09:00 AM - 11:00 AM';
+      }
+    };
+
+    bookDateInputElem.addEventListener('change', handleCustomDateChange);
+    bookDateInputElem.addEventListener('input', handleCustomDateChange);
+  }
+
   if (customDateBtn && bookDateInputElem) {
-    customDateBtn.addEventListener('click', () => {
-      if (typeof bookDateInputElem.showPicker === 'function') {
-        bookDateInputElem.showPicker();
-      } else {
-        bookDateInputElem.focus();
+    customDateBtn.addEventListener('click', (e) => {
+      if (e.target !== bookDateInputElem) {
+        try {
+          if (typeof bookDateInputElem.showPicker === 'function') {
+            bookDateInputElem.showPicker();
+          } else {
+            bookDateInputElem.focus();
+          }
+        } catch (_) {
+          bookDateInputElem.focus();
+        }
       }
     });
   }
+
+  // Time chip selection for custom date
+  const timeChips = document.querySelectorAll('.custom-time-chips .time-chip');
+  timeChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      timeChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const timeVal = chip.dataset.time || '09:00 AM - 11:00 AM';
+      if (bookSlotInputElem) {
+        bookSlotInputElem.value = timeVal;
+      }
+    });
+  });
 
 function openBookingModal(title, price, id = 1, unit = '3 kWh') {
   currentSelectedService = { title, price, id, unit };
@@ -1243,6 +1303,18 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     slotDayAfterLabel.textContent = `${days[dayAfter.getDay()]}, ${dayAfter.getDate()}`;
   }
+
+  // Reset custom date pill state
+  const customDateTextElem = document.getElementById('customDateText');
+  if (customDateTextElem) customDateTextElem.textContent = 'Pick Date';
+  const customTimePickerRowElem = document.getElementById('customTimePickerRow');
+  if (customTimePickerRowElem) customTimePickerRowElem.style.display = 'none';
+  const customDateBtnElem = document.getElementById('customDatePillBtn');
+  if (customDateBtnElem) customDateBtnElem.classList.remove('active');
+  const allSlotPills = document.querySelectorAll('.slot-pill');
+  allSlotPills.forEach(p => p.classList.remove('active'));
+  const firstSlotPill = document.querySelector('.slot-pill[data-date-offset="1"]');
+  if (firstSlotPill) firstSlotPill.classList.add('active');
 
   // Trigger map & location detection on opening booking modal
   const existingLat = document.getElementById('bookLatitude') ? document.getElementById('bookLatitude').value : null;
