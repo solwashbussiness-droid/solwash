@@ -2048,4 +2048,433 @@ body:has(#tab-login.active) .bottom-nav-container,
   border: 1px solid #fde68a;
 }
 
+/* ============================================================
+   MODERN MOBILE APP BOOKING SHEET (REDESIGNED)
+   ============================================================ */
+
+.modal-card.modern-booking-sheet {
+  max-width: 440px;
+  width: 95%;
+  max-height: 90vh;
+  border-radius: 26px;
+  padding: 12px 16px 18px;
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow-y: auto;
+}
+
+.sheet-handle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 4px 0 10px;
+}
+
+.sheet-drag-pill {
+  width: 38px;
+  height: 4.5px;
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.modern-close {
+  position: absolute;
+  right: 0;
+  top: -4px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modern-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.modern-booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 1. Map Section */
+.modern-map-section {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  border: 1.5px solid #e2e8f0;
+}
+
+.modern-map-wrapper {
+  height: 220px;
+  width: 100%;
+  position: relative;
+}
+
+.modern-map-wrapper .zomato-map {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.modern-map-top-bar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 460;
+  pointer-events: none;
+}
+
+.modern-pill-btn {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.modern-pill-btn:hover {
+  background: #ffffff;
+  border-color: #10b981;
+  color: #059669;
+}
+
+.modern-pill-btn.gps-pill {
+  color: #0284c7;
+  border-color: #bae6fd;
+}
+
+.modern-pill-btn.gps-pill:hover {
+  background: #f0f9ff;
+  border-color: #0284c7;
+}
+
+/* 2. Service Header & Power Badge */
+.modern-service-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 2px 4px;
+}
+
+.service-title-box h3 {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+  margin-bottom: 2px;
+}
+
+.service-unit-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.power-boost-pill {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Micro Labels */
+.section-micro-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+/* 3. Slot Section & Horizontal Carousel */
+.quick-slots-carousel {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.quick-slots-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.slot-pill {
+  flex: 0 0 auto;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.slot-pill .slot-day {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.slot-pill .slot-time {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.slot-pill.active {
+  background: #ecfdf5;
+  border-color: #10b981;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.slot-pill.active .slot-day {
+  color: #059669;
+}
+
+.slot-pill.active .slot-time {
+  color: #047857;
+  font-weight: 800;
+}
+
+.slot-pill.custom-date-pill {
+  border-style: dashed;
+}
+
+/* 4. Doorstep Address Cards */
+.address-cards-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.address-input-box {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.address-input-box .box-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 3px;
+}
+
+.address-input-box input {
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+.address-input-box.colony-box {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.address-input-box.colony-box .box-label {
+  color: #16a34a;
+}
+
+.address-input-box .colony-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #15803d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.address-extra-row input {
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #334155;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.address-extra-row input:focus {
+  border-color: #10b981;
+  background: #ffffff;
+}
+
+/* 5. Contact Row */
+.modern-contact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 6px 12px;
+  gap: 8px;
+}
+
+.contact-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.phone-input-wrap.compact {
+  max-width: 170px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.phone-input-wrap.compact input {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* 6. Segmented Payment Switcher */
+.payment-segmented-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 14px;
+}
+
+.pay-segment-btn {
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.pay-segment-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.pay-segment-btn.active .pay-seg-icon {
+  color: #10b981;
+}
+
+/* 7. Sticky Bottom Checkout Bar */
+.modern-checkout-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px 2px;
+  margin-top: 4px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.checkout-price-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.checkout-price-col .price-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.checkout-price-col .price-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+}
+
+.modern-submit-btn {
+  flex: 1;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.modern-submit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+}
+
+.modern-submit-btn:active {
+  transform: scale(0.98);
+}
+
+
 

@@ -1156,15 +1156,48 @@ function setupEventListeners() {
   }
 }
 
+  // Quick Slot Chips Selection Handlers
+  const slotPills = document.querySelectorAll('.slot-pill[data-date-offset]');
+  const bookDateInputElem = document.getElementById('bookDate');
+  const bookSlotInputElem = document.getElementById('bookSlot');
+
+  function updateSlotDate(offset, slotVal) {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    if (bookDateInputElem) bookDateInputElem.value = d.toISOString().split('T')[0];
+    if (bookSlotInputElem) bookSlotInputElem.value = slotVal;
+  }
+
+  slotPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      slotPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      const offset = parseInt(pill.dataset.dateOffset, 10) || 1;
+      const slotVal = pill.dataset.slot || '09:00 AM - 11:00 AM';
+      updateSlotDate(offset, slotVal);
+    });
+  });
+
+  const customDateBtn = document.getElementById('customDatePillBtn');
+  if (customDateBtn && bookDateInputElem) {
+    customDateBtn.addEventListener('click', () => {
+      if (typeof bookDateInputElem.showPicker === 'function') {
+        bookDateInputElem.showPicker();
+      } else {
+        bookDateInputElem.focus();
+      }
+    });
+  }
+
 function openBookingModal(title, price, id = 1, unit = '3 kWh') {
   currentSelectedService = { title, price, id, unit };
-  if (modalServiceTitle) modalServiceTitle.textContent = `Book ${title} (₹${price} / ${unit})`;
+  if (modalServiceTitle) modalServiceTitle.textContent = title;
+  const unitTag = document.getElementById('modalServiceUnit');
+  if (unitTag) unitTag.textContent = `${unit} • Standard System`;
   bookingModal.classList.remove('hidden');
 
-  // Update prices in breakdown
-  const priceTag = document.getElementById('modalServicePriceTag');
+  // Update total price tag
   const totalTag = document.getElementById('modalTotalPayableTag');
-  if (priceTag) priceTag.textContent = `₹${price}`;
   if (totalTag) totalTag.textContent = `₹${price}`;
 
   // Default to Online Razorpay
@@ -1177,7 +1210,7 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
 
   const submitBtn = document.getElementById('submitBookingBtn');
   if (submitBtn) {
-    submitBtn.innerHTML = `<span>Proceed to Pay Online (₹${price})</span>`;
+    submitBtn.innerHTML = `<span>Confirm Booking (₹${price}) ➔</span>`;
   }
 
   // Pre-fill phone if available in customer profile
@@ -1190,27 +1223,34 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
     }
   }
 
-  // Set default booking date to tomorrow if empty
-  const bookDateInput = document.getElementById('bookDate');
-  if (bookDateInput && !bookDateInput.value) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    bookDateInput.value = tomorrow.toISOString().split('T')[0];
+  // Set default booking date to tomorrow and default slot to 09:00 AM - 11:00 AM
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateInput = document.getElementById('bookDate');
+  if (dateInput) {
+    dateInput.value = tomorrow.toISOString().split('T')[0];
+  }
+  const slotInput = document.getElementById('bookSlot');
+  if (slotInput) {
+    slotInput.value = '09:00 AM - 11:00 AM';
+  }
+
+  // Update dynamic Day After label (e.g. "Wed, 16 Sep")
+  const dayAfter = new Date();
+  dayAfter.setDate(dayAfter.getDate() + 2);
+  const slotDayAfterLabel = document.getElementById('slotDayAfterLabel');
+  if (slotDayAfterLabel) {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    slotDayAfterLabel.textContent = `${days[dayAfter.getDay()]}, ${dayAfter.getDate()}`;
   }
 
   // Trigger map & location detection on opening booking modal
   const existingLat = document.getElementById('bookLatitude') ? document.getElementById('bookLatitude').value : null;
   const existingLng = document.getElementById('bookLongitude') ? document.getElementById('bookLongitude').value : null;
   if (existingLat && existingLng) {
-    initOrUpdateBookingMap(parseFloat(existingLat), parseFloat(existingLng), 17);
+    initOrUpdateBookingMap(parseFloat(existingLat), parseFloat(existingLng), 19);
   } else {
-    initOrUpdateBookingMap(28.6139, 77.2090, 14);
-  }
-  const statusBadge = document.getElementById('locationStatusBadge');
-  if (statusBadge && !existingLat) {
-    statusBadge.classList.remove('hidden');
-    statusBadge.className = 'location-status-badge info';
-    statusBadge.innerHTML = `<span>📍 Click <b>"Current Location"</b> to grant permission and find exact rooftop</span>`;
+    initOrUpdateBookingMap(28.6139, 77.2090, 15);
   }
 }
 
