@@ -370,56 +370,26 @@
         <button type="button" class="close-btn modern-close" id="closeModalBtn" aria-label="Close">&times;</button>
       </div>
 
+      <div class="sheet-top-header">
+        <div class="sheet-top-title">Schedule Solar Wash</div>
+        <div class="sheet-top-subtitle">Select slot & doorstep rooftop location</div>
+      </div>
+
       <form id="bookingForm" class="modern-booking-form">
-        <!-- 1. ROOFTOP SATELLITE MAP (Generous Top Section) -->
-        <div class="modern-map-section">
-          <div id="bookingMapContainer" class="zomato-map-wrapper modern-map-wrapper">
-            <div id="bookingMap" class="zomato-map"></div>
-
-            <!-- Floating Top Badges -->
-            <div class="modern-map-top-bar">
-              <button type="button" id="toggleMapLayerBtn" class="modern-pill-btn" onclick="toggleMapTileLayer()">
-                <span id="layerBtnIcon">🗺️</span>
-                <span id="layerBtnText">Map View</span>
-              </button>
-              <button type="button" id="detectLocationBtn" class="modern-pill-btn gps-pill" onclick="detectCurrentLocation(true)">
-                <span>🎯 Current GPS</span>
-              </button>
-            </div>
-
-            <!-- Fixed Center Pin -->
-            <div class="zomato-center-marker" id="zomatoCenterMarker">
-              <div class="marker-pin-tooltip" id="markerPinTooltip">Point to Solar Panels 📍</div>
-              <svg class="marker-pin-svg" viewBox="0 0 384 512" width="28" height="38">
-                <path fill="#10b981" d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.773-39.464 0z"/>
-                <circle cx="192" cy="192" r="75" fill="#ffffff"/>
-                <circle cx="192" cy="192" r="45" fill="#047857"/>
-              </svg>
-              <div class="marker-pin-shadow"></div>
-            </div>
-
-            <!-- Compact Zoom In / Out Controls -->
-            <div class="zomato-zoom-controls">
-              <button type="button" class="zomato-zoom-btn" onclick="bookingMapZoom(1)">+</button>
-              <button type="button" class="zomato-zoom-btn" onclick="bookingMapZoom(-1)">-</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. SERVICE TITLE & POWER BENEFIT BADGE -->
+        <!-- 1. SERVICE TITLE & POWER BENEFIT BADGE (Top Overview Card) -->
         <div class="modern-service-header">
           <div class="service-title-box">
             <h3 id="modalServiceTitle">Rooftop Solar Wash</h3>
             <span class="service-unit-pill" id="modalServiceUnit">3 kWh • Standard System</span>
           </div>
           <div class="power-boost-pill">
-            <span>⚡ +25% Power Yield ↗</span>
+            <span>⚡ Pure DI Cleaning</span>
           </div>
         </div>
 
-        <!-- 3. SWIPEABLE DATE & TIME SLOTS -->
+        <!-- 2. SWIPEABLE DATE & TIME SLOTS -->
         <div class="modern-slot-section">
-          <label class="section-micro-label">SCHEDULE SERVICE SLOT</label>
+          <label class="section-micro-label">SELECT DATE & TIME SLOT</label>
           <div class="quick-slots-carousel" id="quickSlotsCarousel">
             <div class="slot-pill active" data-date-offset="1" data-slot="09:00 AM - 11:00 AM">
               <span class="slot-day">Tomorrow</span>
@@ -439,7 +409,7 @@
             </div>
             <div class="slot-pill custom-date-pill" id="customDatePillBtn">
               <span class="slot-day">📅 Custom</span>
-              <span class="slot-time">Other Date</span>
+              <span class="slot-time">Pick Date</span>
             </div>
           </div>
           <!-- Hidden inputs for backward compatibility -->
@@ -452,21 +422,68 @@
           </select>
         </div>
 
-        <!-- 4. DOORSTEP ADDRESS (2 Clean Modern Cards) -->
-        <div class="modern-address-section">
-          <label class="section-micro-label">DOORSTEP ADDRESS</label>
-          <div class="address-cards-row">
-            <div class="address-input-box flat-no-box">
-              <span class="box-label">House / Flat No. *</span>
-              <input type="text" id="doorstepHouseNo" placeholder="e.g. B-401, Floor 3" required>
-            </div>
-            <div class="address-input-box colony-box">
-              <span class="box-label">Auto-detected Rooftop</span>
-              <div class="colony-text" id="detectedAreaText">Pan map to pinpoint exact roof</div>
+        <!-- 3. ROOFTOP SATELLITE MAP -->
+        <div class="modern-map-card">
+          <div class="map-card-header">
+            <span class="section-micro-label">PIN EXACT ROOFTOP 📍</span>
+            <span class="map-sub-hint">Pan map to place pin over panels</span>
+          </div>
+          <div class="modern-map-section">
+            <div id="bookingMapContainer" class="zomato-map-wrapper modern-map-wrapper">
+              <div id="bookingMap" class="zomato-map"></div>
+
+              <!-- Floating Top Badges -->
+              <div class="modern-map-top-bar">
+                <button type="button" id="toggleMapTileLayerBtn" class="modern-pill-btn" onclick="toggleMapTileLayer()">
+                  <span id="layerBtnIcon">🗺️</span>
+                  <span id="layerBtnText">Map View</span>
+                </button>
+                <button type="button" id="detectLocationBtn" class="modern-pill-btn gps-pill" onclick="detectCurrentLocation(true)">
+                  <span>🎯 Current GPS</span>
+                </button>
+              </div>
+
+              <!-- Fixed Center Pin in SolWash Solar Gold & Navy -->
+              <div class="zomato-center-marker" id="zomatoCenterMarker">
+                <div class="marker-pin-tooltip" id="markerPinTooltip">Solar Panels Pin 📍</div>
+                <svg class="marker-pin-svg" viewBox="0 0 384 512" width="28" height="38">
+                  <path fill="#f59e0b" d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.773-39.464 0z"/>
+                  <circle cx="192" cy="192" r="75" fill="#ffffff"/>
+                  <circle cx="192" cy="192" r="45" fill="#121d33"/>
+                </svg>
+                <div class="marker-pin-shadow"></div>
+              </div>
+
+              <!-- Compact Zoom In / Out Controls -->
+              <div class="zomato-zoom-controls">
+                <button type="button" class="zomato-zoom-btn" onclick="bookingMapZoom(1)">+</button>
+                <button type="button" class="zomato-zoom-btn" onclick="bookingMapZoom(-1)">-</button>
+              </div>
             </div>
           </div>
-          <div class="address-extra-row">
-            <input type="text" id="doorstepLandmark" placeholder="Landmark or Building / Society name">
+
+          <!-- Detected Locality Preview -->
+          <div class="detected-address-chip">
+            <span class="detected-pin-icon">📍</span>
+            <div class="detected-text-col">
+              <span class="detected-micro">DETECTED LOCALITY</span>
+              <span class="detected-full" id="detectedAreaText">Pan map to pinpoint exact roof</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. DOORSTEP ADDRESS FIELDS -->
+        <div class="modern-address-section">
+          <label class="section-micro-label">DOORSTEP DETAILS</label>
+          <div class="address-fields-stack">
+            <div class="address-input-wrap">
+              <span class="input-icon">🏠</span>
+              <input type="text" id="doorstepHouseNo" placeholder="House / Flat / Floor / Unit No. *" required>
+            </div>
+            <div class="address-input-wrap">
+              <span class="input-icon">🏢</span>
+              <input type="text" id="doorstepLandmark" placeholder="Landmark or Building / Society Name *" required>
+            </div>
           </div>
           <input type="hidden" id="doorstepRooftopNote" value="">
           <textarea id="bookAddress" style="display: none;"></textarea>
@@ -474,26 +491,32 @@
           <input type="hidden" id="bookLongitude" value="">
         </div>
 
-        <!-- 5. CONTACT MOBILE (Compact Row) -->
-        <div class="modern-contact-row">
-          <span class="contact-label">Contact Mobile *</span>
-          <div class="phone-input-wrap compact">
+        <!-- 5. CONTACT MOBILE -->
+        <div class="modern-contact-section">
+          <label class="section-micro-label">CONTACT MOBILE</label>
+          <div class="phone-input-wrap theme-phone">
             <span class="phone-prefix">+91</span>
-            <input type="tel" id="bookPhone" placeholder="Enter 10-digit number" maxlength="10" required pattern="[0-9]{10}">
+            <input type="tel" id="bookPhone" placeholder="Enter 10-digit mobile number" maxlength="10" required pattern="[0-9]{10}">
           </div>
         </div>
 
         <!-- 6. SEGMENTED PAYMENT SWITCHER -->
         <div class="modern-payment-section">
           <label class="section-micro-label">PAYMENT METHOD</label>
-          <div class="payment-segmented-bar">
+          <div class="payment-cards-grid">
             <div class="pay-segment-btn active" id="payMethodRazorpay" data-method="razorpay">
               <span class="pay-seg-icon">⚡</span>
-              <span class="pay-seg-text">Pay Online (UPI / Cards)</span>
+              <div class="pay-seg-text-wrap">
+                <span class="pay-seg-title">Pay Online</span>
+                <span class="pay-seg-sub">UPI, Cards, Netbanking</span>
+              </div>
             </div>
             <div class="pay-segment-btn" id="payMethodOffline" data-method="cash_on_delivery">
-              <span class="pay-seg-icon">🤝</span>
-              <span class="pay-seg-text">Pay After Service</span>
+              <span class="pay-seg-icon">💵</span>
+              <div class="pay-seg-text-wrap">
+                <span class="pay-seg-title">Pay After Service</span>
+                <span class="pay-seg-sub">Cash or UPI on completion</span>
+              </div>
             </div>
           </div>
           <input type="hidden" id="selectedPaymentMode" value="razorpay">
@@ -505,7 +528,7 @@
             <span class="price-label">Amount Payable</span>
             <div class="price-val" id="modalTotalPayableTag">₹299</div>
           </div>
-          <button type="submit" class="modern-submit-btn" id="submitBookingBtn">
+          <button type="submit" class="btn-golden-booking" id="submitBookingBtn">
             <span>Confirm Booking ➔</span>
           </button>
         </div>

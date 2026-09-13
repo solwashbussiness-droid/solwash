@@ -873,13 +873,13 @@ function setupEventListeners() {
       if (payMethodRazorpay) payMethodRazorpay.classList.add('active');
       if (payMethodOffline) payMethodOffline.classList.remove('active');
       if (submitBookingBtn) {
-        submitBookingBtn.innerHTML = `<span>Proceed to Pay Online (₹${price})</span>`;
+        submitBookingBtn.innerHTML = `<span>Proceed to Pay Online (₹${price}) ➔</span>`;
       }
     } else {
       if (payMethodOffline) payMethodOffline.classList.add('active');
       if (payMethodRazorpay) payMethodRazorpay.classList.remove('active');
       if (submitBookingBtn) {
-        submitBookingBtn.innerHTML = `<span>Confirm & Pay After Service (₹${price})</span>`;
+        submitBookingBtn.innerHTML = `<span>Confirm & Pay After Service (₹${price}) ➔</span>`;
       }
     }
   }
@@ -924,8 +924,8 @@ function setupEventListeners() {
         document.getElementById('bookAddress').value = address;
       }
 
-      if (!houseNo || !landmark) {
-        showToast('Please enter House/Flat No. and Landmark.');
+      if (!houseNo) {
+        showToast('Please enter House / Flat No.');
         return;
       }
 
