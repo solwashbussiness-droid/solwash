@@ -2352,6 +2352,37 @@ body:has(#tab-login.active) .bottom-nav-container,
   box-shadow: 0 2px 6px rgba(18, 29, 51, 0.2);
 }
 
+/* Disabled & Greyed-out Past Date Pill / Time Chip Styles */
+.slot-pill.disabled {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+  opacity: 0.55 !important;
+  box-shadow: none !important;
+}
+
+.slot-pill.disabled .slot-day,
+.slot-pill.disabled .slot-time {
+  color: #94a3b8 !important;
+  text-decoration: line-through;
+}
+
+.time-chip.disabled {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+  text-decoration: line-through;
+  box-shadow: none !important;
+}
+
+.time-chip.disabled:hover {
+  border-color: #e2e8f0 !important;
+  color: #94a3b8 !important;
+}
+
 /* 3. Rooftop Map Card & Section */
 .modern-map-card {
   display: flex;

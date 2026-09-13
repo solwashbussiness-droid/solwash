@@ -1192,124 +1192,53 @@ function setupEventListeners() {
   }
 }
 
-  // Quick Slot Chips Selection Handlers
-  const slotPills = document.querySelectorAll('.slot-pill[data-date-offset]');
+  // ============================================================
+  // DATE & TIME SELECTION CONTROLLER
+  // ============================================================
   const customDateBtn = document.getElementById('customDatePillBtn');
   const customDateText = document.getElementById('customDateText');
-  const customTimePickerRow = document.getElementById('customTimePickerRow');
   const bookDateInputElem = document.getElementById('bookDate');
   const bookSlotInputElem = document.getElementById('bookSlot');
+  const selectedDateBadge = document.getElementById('selectedDateBadge');
+  const slotTimingHint = document.getElementById('slotTimingHint');
+  const timeChips = document.querySelectorAll('.custom-time-chips .time-chip');
 
-  function updateSlotDate(offset, slotVal) {
-    const d = new Date();
-    d.setDate(d.getDate() + offset);
-    if (bookDateInputElem) {
-      bookDateInputElem.min = getLocalDateString();
-      bookDateInputElem.value = getLocalDateString(d);
-    }
-    if (bookSlotInputElem) bookSlotInputElem.value = slotVal;
-    if (customDateText) customDateText.textContent = 'Pick Date';
-    if (customTimePickerRow) customTimePickerRow.style.display = 'none';
-  }
-
-  slotPills.forEach(pill => {
-    pill.addEventListener('click', () => {
-      slotPills.forEach(p => p.classList.remove('active'));
-      if (customDateBtn) customDateBtn.classList.remove('active');
-      pill.classList.add('active');
-      const offset = parseInt(pill.dataset.dateOffset, 10) || 1;
-      const slotVal = pill.dataset.slot || '09:00 AM - 11:00 AM';
-      updateSlotDate(offset, slotVal);
-    });
-  });
-
-  // Set min date on date input to today
-  if (bookDateInputElem) {
-    const today = getLocalDateString();
-    bookDateInputElem.min = today;
-
-    const handleCustomDateChange = () => {
-      const val = bookDateInputElem.value;
-      if (!val) return;
-
-      const today = getLocalDateString();
-      if (val < today) {
-        showToast('Past dates cannot be selected. Setting to today.');
-        bookDateInputElem.value = today;
-      }
-
-      const activeVal = bookDateInputElem.value;
-      slotPills.forEach(p => p.classList.remove('active'));
-      if (customDateBtn) customDateBtn.classList.add('active');
-
-      const parts = activeVal.split('-');
-      if (parts.length === 3) {
-        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const formatted = `${d.getDate()} ${months[d.getMonth()]}`;
-        if (customDateText) {
-          customDateText.textContent = formatted;
-        }
-      }
-
-      if (customTimePickerRow) {
-        customTimePickerRow.style.display = 'flex';
-      }
-
-      validateCustomTimeChips(activeVal);
-    };
-
-    bookDateInputElem.addEventListener('change', handleCustomDateChange);
-    bookDateInputElem.addEventListener('input', handleCustomDateChange);
-  }
-
-  function validateCustomTimeChips(selectedDateStr) {
+  // Helper to update & validate timing slots based on selected date
+  function updateTimingSlotsForDate(selectedDateStr) {
     const todayStr = getLocalDateString();
     const isToday = (selectedDateStr === todayStr);
     const now = new Date();
     const currentHour = now.getHours();
 
     let firstAvailableChip = null;
-    let activeChipValid = false;
+    let currentActiveStillValid = false;
 
     timeChips.forEach(chip => {
-      const timeVal = chip.dataset.time || '09:00 AM - 11:00 AM';
-      let hour = 9;
-      if (timeVal.startsWith('09:')) hour = 9;
-      else if (timeVal.startsWith('10:')) hour = 10;
-      else if (timeVal.startsWith('11:')) hour = 11;
-      else if (timeVal.startsWith('02:') || timeVal.startsWith('2:')) hour = 14;
-      else if (timeVal.startsWith('04:') || timeVal.startsWith('4:')) hour = 16;
-
-      if (isToday && currentHour >= hour) {
+      const slotHour = parseInt(chip.dataset.hour, 10) || 9;
+      // If booking for today and slot start hour is <= current hour, slot is passed
+      if (isToday && currentHour >= slotHour) {
         chip.classList.add('disabled');
-        chip.style.opacity = '0.35';
-        chip.style.cursor = 'not-allowed';
-        chip.style.textDecoration = 'line-through';
+        if (chip.classList.contains('active')) {
+          chip.classList.remove('active');
+        }
       } else {
         chip.classList.remove('disabled');
-        chip.style.opacity = '1';
-        chip.style.cursor = 'pointer';
-        chip.style.textDecoration = 'none';
         if (!firstAvailableChip) firstAvailableChip = chip;
-        if (chip.classList.contains('active')) activeChipValid = true;
+        if (chip.classList.contains('active')) currentActiveStillValid = true;
       }
     });
 
-    if (!activeChipValid) {
+    if (!currentActiveStillValid) {
       timeChips.forEach(c => c.classList.remove('active'));
       if (firstAvailableChip) {
         firstAvailableChip.classList.add('active');
         if (bookSlotInputElem) bookSlotInputElem.value = firstAvailableChip.dataset.time;
       } else if (isToday) {
+        // All slots for today have completed!
         showToast('All slots for today have completed. Switching to Tomorrow.');
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = getLocalDateString(tomorrow);
-        if (bookDateInputElem) bookDateInputElem.value = tomorrowStr;
-        validateCustomTimeChips(tomorrowStr);
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        if (customDateText) customDateText.textContent = `${tomorrow.getDate()} ${months[tomorrow.getMonth()]}`;
+        const tomorrowPill = document.getElementById('pillTomorrow');
+        if (tomorrowPill) tomorrowPill.click();
+        return;
       }
     } else {
       const activeChip = document.querySelector('.custom-time-chips .time-chip.active');
@@ -1317,6 +1246,78 @@ function setupEventListeners() {
         bookSlotInputElem.value = activeChip.dataset.time;
       }
     }
+
+    if (slotTimingHint) {
+      if (isToday) {
+        slotTimingHint.textContent = 'Available slots for today';
+        slotTimingHint.style.color = '#ea8a10';
+      } else {
+        slotTimingHint.textContent = 'All slots available';
+        slotTimingHint.style.color = '#059669';
+      }
+    }
+  }
+
+  // Setup Date Pills Click Handlers
+  const datePills = document.querySelectorAll('.slot-pill:not(.custom-date-pill)');
+  datePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      if (pill.classList.contains('disabled')) {
+        showToast('All booking slots for today have completed. Please choose tomorrow or an upcoming date.');
+        return;
+      }
+
+      document.querySelectorAll('.slot-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+
+      const offset = parseInt(pill.dataset.dateOffset, 10) || 0;
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + offset);
+      const dateStr = getLocalDateString(targetDate);
+
+      if (bookDateInputElem) bookDateInputElem.value = dateStr;
+      if (customDateText) customDateText.textContent = 'Pick Date';
+
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dateLabel = offset === 0 ? `Today, ${targetDate.getDate()} ${months[targetDate.getMonth()]}` : (offset === 1 ? `Tomorrow, ${targetDate.getDate()} ${months[targetDate.getMonth()]}` : `${days[targetDate.getDay()]}, ${targetDate.getDate()} ${months[targetDate.getMonth()]}`);
+      if (selectedDateBadge) selectedDateBadge.textContent = dateLabel;
+
+      updateTimingSlotsForDate(dateStr);
+    });
+  });
+
+  // Custom Date Input Handler
+  if (bookDateInputElem) {
+    const handleCustomDateChange = () => {
+      const val = bookDateInputElem.value;
+      if (!val) return;
+
+      const todayStr = getLocalDateString();
+      if (val < todayStr) {
+        showToast('Past dates cannot be selected. Setting to today.');
+        bookDateInputElem.value = todayStr;
+      }
+
+      const activeVal = bookDateInputElem.value;
+      document.querySelectorAll('.slot-pill').forEach(p => p.classList.remove('active'));
+      if (customDateBtn) customDateBtn.classList.add('active');
+
+      const parts = activeVal.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const formatted = `${d.getDate()} ${months[d.getMonth()]}`;
+        if (customDateText) customDateText.textContent = formatted;
+        if (selectedDateBadge) selectedDateBadge.textContent = `${days[d.getDay()]}, ${formatted}`;
+      }
+
+      updateTimingSlotsForDate(activeVal);
+    };
+
+    bookDateInputElem.addEventListener('change', handleCustomDateChange);
+    bookDateInputElem.addEventListener('input', handleCustomDateChange);
   }
 
   if (customDateBtn && bookDateInputElem) {
@@ -1335,8 +1336,7 @@ function setupEventListeners() {
     });
   }
 
-  // Time chip selection for custom date
-  const timeChips = document.querySelectorAll('.custom-time-chips .time-chip');
+  // Time Chips Click Handlers
   timeChips.forEach(chip => {
     chip.addEventListener('click', () => {
       if (chip.classList.contains('disabled')) {
@@ -1386,52 +1386,70 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
     }
   }
 
-  // Set default booking date to tomorrow and default slot to 09:00 AM - 11:00 AM
-  const todayStr = getLocalDateString();
+  // Initialize dynamic date labels & past-slot check
+  const now = new Date();
+  const currentHour = now.getHours();
+  const today = new Date();
+  const todayStr = getLocalDateString(today);
   const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setDate(today.getDate() + 1);
   const tomorrowStr = getLocalDateString(tomorrow);
+  const dayAfter = new Date();
+  dayAfter.setDate(today.getDate() + 2);
+  const dayAfterStr = getLocalDateString(dayAfter);
+
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const pillTodayDate = document.getElementById('pillTodayDate');
+  if (pillTodayDate) pillTodayDate.textContent = `${today.getDate()} ${months[today.getMonth()]}`;
+  const pillTomorrowDate = document.getElementById('pillTomorrowDate');
+  if (pillTomorrowDate) pillTomorrowDate.textContent = `${tomorrow.getDate()} ${months[tomorrow.getMonth()]}`;
+  const pillDayAfterDate = document.getElementById('pillDayAfterDate');
+  if (pillDayAfterDate) pillDayAfterDate.textContent = `${dayAfter.getDate()} ${months[dayAfter.getMonth()]}`;
+  const slotDayAfterLabel = document.getElementById('slotDayAfterLabel');
+  if (slotDayAfterLabel) slotDayAfterLabel.textContent = `${days[dayAfter.getDay()]}`;
+
   const dateInput = document.getElementById('bookDate');
   if (dateInput) {
     dateInput.min = todayStr;
-    dateInput.value = tomorrowStr;
-  }
-  const slotInput = document.getElementById('bookSlot');
-  if (slotInput) {
-    slotInput.value = '09:00 AM - 11:00 AM';
   }
 
-  // Update dynamic Day After label (e.g. "Wed, 16 Sep")
-  const dayAfter = new Date();
-  dayAfter.setDate(dayAfter.getDate() + 2);
-  const slotDayAfterLabel = document.getElementById('slotDayAfterLabel');
-  if (slotDayAfterLabel) {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    slotDayAfterLabel.textContent = `${days[dayAfter.getDay()]}, ${dayAfter.getDate()}`;
+  // Check if today has slots remaining (earliest closing slot is 4:00 PM / 16:00)
+  const pillToday = document.getElementById('pillToday');
+  const pillTomorrow = document.getElementById('pillTomorrow');
+  const allTodaySlotsPassed = (currentHour >= 16);
+
+  document.querySelectorAll('.slot-pill').forEach(p => p.classList.remove('active'));
+  if (pillToday) {
+    if (allTodaySlotsPassed) {
+      pillToday.classList.add('disabled');
+      pillToday.title = 'All booking slots for today have completed';
+    } else {
+      pillToday.classList.remove('disabled');
+      pillToday.removeAttribute('title');
+    }
   }
 
-  // Reset custom date pill state
-  const customDateTextElem = document.getElementById('customDateText');
-  if (customDateTextElem) customDateTextElem.textContent = 'Pick Date';
-  const customTimePickerRowElem = document.getElementById('customTimePickerRow');
-  if (customTimePickerRowElem) customTimePickerRowElem.style.display = 'none';
-  const customDateBtnElem = document.getElementById('customDatePillBtn');
-  if (customDateBtnElem) customDateBtnElem.classList.remove('active');
-  const allSlotPills = document.querySelectorAll('.slot-pill');
-  allSlotPills.forEach(p => p.classList.remove('active'));
-  const firstSlotPill = document.querySelector('.slot-pill[data-date-offset="1"]');
-  if (firstSlotPill) firstSlotPill.classList.add('active');
+  // If today still has slots and it's before 2:00 PM (14:00), default to Today, else default to Tomorrow
+  let initialDateStr = tomorrowStr;
+  if (!allTodaySlotsPassed && currentHour < 14 && pillToday) {
+    pillToday.classList.add('active');
+    initialDateStr = todayStr;
+    if (dateInput) dateInput.value = todayStr;
+    if (selectedDateBadge) selectedDateBadge.textContent = `Today, ${today.getDate()} ${months[today.getMonth()]}`;
+  } else if (pillTomorrow) {
+    pillTomorrow.classList.add('active');
+    initialDateStr = tomorrowStr;
+    if (dateInput) dateInput.value = tomorrowStr;
+    if (selectedDateBadge) selectedDateBadge.textContent = `Tomorrow, ${tomorrow.getDate()} ${months[tomorrow.getMonth()]}`;
+  }
 
-  // Reset time chips active state to 09:00 AM - 11:00 AM
-  const allTimeChips = document.querySelectorAll('.custom-time-chips .time-chip');
-  allTimeChips.forEach((chip, idx) => {
-    chip.classList.remove('disabled');
-    chip.style.opacity = '1';
-    chip.style.cursor = 'pointer';
-    chip.style.textDecoration = 'none';
-    if (idx === 0) chip.classList.add('active');
-    else chip.classList.remove('active');
-  });
+  // Reset custom date text
+  if (customDateText) customDateText.textContent = 'Pick Date';
+
+  // Update timings for the initially selected date
+  updateTimingSlotsForDate(initialDateStr);
 
   // Trigger map & location detection on opening booking modal
   const existingLat = document.getElementById('bookLatitude') ? document.getElementById('bookLatitude').value : null;

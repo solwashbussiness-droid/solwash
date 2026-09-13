@@ -389,23 +389,22 @@
 
         <!-- 2. SWIPEABLE DATE & TIME SLOTS -->
         <div class="modern-slot-section">
-          <label class="section-micro-label">SELECT DATE & TIME SLOT</label>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="section-micro-label" style="margin-bottom: 0;">SELECT DATE</label>
+            <span id="selectedDateBadge" style="font-size: 11px; font-weight: 700; color: #f5a623;">-</span>
+          </div>
           <div class="quick-slots-carousel" id="quickSlotsCarousel">
-            <div class="slot-pill active" data-date-offset="1" data-slot="09:00 AM - 11:00 AM">
-              <span class="slot-day">Tomorrow</span>
-              <span class="slot-time">09:00 AM</span>
+            <div class="slot-pill" id="pillToday" data-date-offset="0">
+              <span class="slot-day">Today</span>
+              <span class="slot-time" id="pillTodayDate">-</span>
             </div>
-            <div class="slot-pill" data-date-offset="1" data-slot="11:00 AM - 01:00 PM">
+            <div class="slot-pill active" id="pillTomorrow" data-date-offset="1">
               <span class="slot-day">Tomorrow</span>
-              <span class="slot-time">11:00 AM</span>
+              <span class="slot-time" id="pillTomorrowDate">-</span>
             </div>
-            <div class="slot-pill" data-date-offset="1" data-slot="02:00 PM - 04:00 PM">
-              <span class="slot-day">Tomorrow</span>
-              <span class="slot-time">02:00 PM</span>
-            </div>
-            <div class="slot-pill" data-date-offset="2" data-slot="10:00 AM - 12:00 PM">
+            <div class="slot-pill" id="pillDayAfter" data-date-offset="2">
               <span class="slot-day" id="slotDayAfterLabel">Day After</span>
-              <span class="slot-time">10:00 AM</span>
+              <span class="slot-time" id="pillDayAfterDate">-</span>
             </div>
             <div class="slot-pill custom-date-pill" id="customDatePillBtn">
               <span class="slot-day">📅 Custom</span>
@@ -414,14 +413,17 @@
             </div>
           </div>
 
-          <!-- Preferred time chips when custom date is chosen -->
-          <div class="custom-time-row" id="customTimePickerRow" style="display: none;">
-            <span class="custom-time-label">Preferred Time Slot:</span>
+          <!-- Time slot chips row (Always visible, adapts dynamically to chosen date) -->
+          <div class="custom-time-row" id="customTimePickerRow" style="display: flex; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <span class="custom-time-label">SELECT TIME SLOT:</span>
+              <span id="slotTimingHint" style="font-size: 10px; color: #64748b; font-weight: 700;"></span>
+            </div>
             <div class="custom-time-chips">
-              <span class="time-chip active" data-time="09:00 AM - 11:00 AM">9 - 11 AM</span>
-              <span class="time-chip" data-time="11:00 AM - 01:00 PM">11 - 1 PM</span>
-              <span class="time-chip" data-time="02:00 PM - 04:00 PM">2 - 4 PM</span>
-              <span class="time-chip" data-time="04:00 PM - 06:00 PM">4 - 6 PM</span>
+              <span class="time-chip active" data-time="09:00 AM - 11:00 AM" data-hour="9">09:00 - 11:00 AM</span>
+              <span class="time-chip" data-time="11:00 AM - 01:00 PM" data-hour="11">11:00 AM - 01:00 PM</span>
+              <span class="time-chip" data-time="02:00 PM - 04:00 PM" data-hour="14">02:00 - 04:00 PM</span>
+              <span class="time-chip" data-time="04:00 PM - 06:00 PM" data-hour="16">04:00 - 06:00 PM</span>
             </div>
           </div>
 
