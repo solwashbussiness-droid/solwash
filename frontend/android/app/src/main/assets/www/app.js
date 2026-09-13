@@ -929,6 +929,21 @@ function setupEventListeners() {
         return;
       }
 
+      if (date === getLocalDateString()) {
+        const now = new Date();
+        const currentHour = now.getHours();
+        let slotHour = 9;
+        if (slot.startsWith('09:')) slotHour = 9;
+        else if (slot.startsWith('10:')) slotHour = 10;
+        else if (slot.startsWith('11:')) slotHour = 11;
+        else if (slot.startsWith('02:') || slot.startsWith('2:')) slotHour = 14;
+        else if (slot.startsWith('04:') || slot.startsWith('4:')) slotHour = 16;
+        if (currentHour >= slotHour) {
+          showToast('This time slot has already passed for today. Please choose an upcoming slot or date.');
+          return;
+        }
+      }
+
       if (!houseNo) {
         showToast('Please enter House / Flat No.');
         return;
@@ -1234,14 +1249,67 @@ function setupEventListeners() {
         customTimePickerRow.style.display = 'flex';
       }
 
-      // Default slot if none set
-      if (bookSlotInputElem && !bookSlotInputElem.value) {
-        bookSlotInputElem.value = '09:00 AM - 11:00 AM';
-      }
+      validateCustomTimeChips(activeVal);
     };
 
     bookDateInputElem.addEventListener('change', handleCustomDateChange);
     bookDateInputElem.addEventListener('input', handleCustomDateChange);
+  }
+
+  function validateCustomTimeChips(selectedDateStr) {
+    const todayStr = getLocalDateString();
+    const isToday = (selectedDateStr === todayStr);
+    const now = new Date();
+    const currentHour = now.getHours();
+
+    let firstAvailableChip = null;
+    let activeChipValid = false;
+
+    timeChips.forEach(chip => {
+      const timeVal = chip.dataset.time || '09:00 AM - 11:00 AM';
+      let hour = 9;
+      if (timeVal.startsWith('09:')) hour = 9;
+      else if (timeVal.startsWith('10:')) hour = 10;
+      else if (timeVal.startsWith('11:')) hour = 11;
+      else if (timeVal.startsWith('02:') || timeVal.startsWith('2:')) hour = 14;
+      else if (timeVal.startsWith('04:') || timeVal.startsWith('4:')) hour = 16;
+
+      if (isToday && currentHour >= hour) {
+        chip.classList.add('disabled');
+        chip.style.opacity = '0.35';
+        chip.style.cursor = 'not-allowed';
+        chip.style.textDecoration = 'line-through';
+      } else {
+        chip.classList.remove('disabled');
+        chip.style.opacity = '1';
+        chip.style.cursor = 'pointer';
+        chip.style.textDecoration = 'none';
+        if (!firstAvailableChip) firstAvailableChip = chip;
+        if (chip.classList.contains('active')) activeChipValid = true;
+      }
+    });
+
+    if (!activeChipValid) {
+      timeChips.forEach(c => c.classList.remove('active'));
+      if (firstAvailableChip) {
+        firstAvailableChip.classList.add('active');
+        if (bookSlotInputElem) bookSlotInputElem.value = firstAvailableChip.dataset.time;
+      } else if (isToday) {
+        showToast('All slots for today have completed. Switching to Tomorrow.');
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = getLocalDateString(tomorrow);
+        if (bookDateInputElem) bookDateInputElem.value = tomorrowStr;
+        validateCustomTimeChips(tomorrowStr);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        if (customDateText) customDateText.textContent = `${tomorrow.getDate()} ${months[tomorrow.getMonth()]}`;
+      }
+    } else {
+      const activeChip = document.querySelector('.custom-time-chips .time-chip.active');
+      if (activeChip && bookSlotInputElem) {
+        bookSlotInputElem.value = activeChip.dataset.time;
+      }
+    }
   }
 
   if (customDateBtn && bookDateInputElem) {
@@ -1264,6 +1332,10 @@ function setupEventListeners() {
   const timeChips = document.querySelectorAll('.custom-time-chips .time-chip');
   timeChips.forEach(chip => {
     chip.addEventListener('click', () => {
+      if (chip.classList.contains('disabled')) {
+        showToast('This time slot has already passed for today.');
+        return;
+      }
       timeChips.forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       const timeVal = chip.dataset.time || '09:00 AM - 11:00 AM';
@@ -1342,6 +1414,17 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
   allSlotPills.forEach(p => p.classList.remove('active'));
   const firstSlotPill = document.querySelector('.slot-pill[data-date-offset="1"]');
   if (firstSlotPill) firstSlotPill.classList.add('active');
+
+  // Reset time chips active state to 09:00 AM - 11:00 AM
+  const allTimeChips = document.querySelectorAll('.custom-time-chips .time-chip');
+  allTimeChips.forEach((chip, idx) => {
+    chip.classList.remove('disabled');
+    chip.style.opacity = '1';
+    chip.style.cursor = 'pointer';
+    chip.style.textDecoration = 'none';
+    if (idx === 0) chip.classList.add('active');
+    else chip.classList.remove('active');
+  });
 
   // Trigger map & location detection on opening booking modal
   const existingLat = document.getElementById('bookLatitude') ? document.getElementById('bookLatitude').value : null;
