@@ -102,8 +102,19 @@ const startServer = async () => {
   return server;
 };
 
+// Process-level crash prevention guards for high traffic stability
+process.on('uncaughtException', (err) => {
+  console.error('[CRITICAL] Uncaught Exception intercepted:', err.message);
+  console.error(err.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRITICAL] Unhandled Rejection intercepted:', reason);
+});
+
 if (require.main === module) {
   startServer();
 }
 
 module.exports = { app, startServer };
+

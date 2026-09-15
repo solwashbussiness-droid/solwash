@@ -9,7 +9,9 @@ module.exports = {
         PORT: 5000
       },
       autorestart: true,
-      restart_delay: 2000
+      restart_delay: 2000,
+      max_memory_restart: '800M',
+      exp_backoff_restart_delay: 100
     },
     {
       name: 'solwash-admin',

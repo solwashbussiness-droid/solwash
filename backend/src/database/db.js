@@ -54,6 +54,17 @@ const initDatabase = async () => {
     // Foreign keys support
     await db.runAsync('PRAGMA foreign_keys = ON');
 
+    // High-concurrency WAL mode & database tuning
+    try {
+      await db.runAsync('PRAGMA journal_mode = WAL');
+      await db.runAsync('PRAGMA synchronous = NORMAL');
+      await db.runAsync('PRAGMA busy_timeout = 10000');
+      await db.runAsync('PRAGMA cache_size = -64000');
+      await db.runAsync('PRAGMA temp_store = MEMORY');
+    } catch (pragmaErr) {
+      console.warn('Notice setting database PRAGMA:', pragmaErr.message);
+    }
+
     // 1. Users Table
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS users (
@@ -159,6 +170,15 @@ const initDatabase = async () => {
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     `);
+
+    // High-concurrency performance indexes
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)');
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)');
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_orders_order_num ON orders(order_number)');
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)');
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)');
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
+    await db.runAsync('CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email)');
 
     // 7. Seed default admin if not exists
     const existingAdmin = await db.getAsync(
