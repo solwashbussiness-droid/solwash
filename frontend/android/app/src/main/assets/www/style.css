@@ -3010,3 +3010,28 @@ body:has(#tab-login.active) .bottom-nav-container,
 .btn-location-secondary:hover {
   color: #0f172a;
 }
+
+.btn-cancel-order-pill {
+  background: #fff1f2;
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel-order-pill:hover {
+  background: #ffe4e6;
+  border-color: #fda4af;
+}
+
+.btn-cancel-order-pill:active {
+  transform: scale(0.97);
+}
+

@@ -2193,6 +2193,8 @@ function filterBookingsList(filter) {
     filtered = filtered.filter(b => ['confirmed', 'picked_up'].includes(b.status));
   } else if (filter === 'in_progress') {
     filtered = filtered.filter(b => ['in_process', 'ready', 'out_for_delivery'].includes(b.status));
+  } else if (filter === 'cancelled') {
+    filtered = filtered.filter(b => b.status === 'cancelled');
   }
 
   if (filtered.length === 0) {
@@ -2202,52 +2204,71 @@ function filterBookingsList(filter) {
     emptyView.style.display = 'none';
     activeList.style.display = 'block';
     activeList.innerHTML = filtered.map(b => {
-      const isPaid = String(b.payment_status || '').toLowerCase() === 'paid';
+      const isCancelled = b.status === 'cancelled';
+      const isPaid = !isCancelled && String(b.payment_status || '').toLowerCase() === 'paid';
       const isRazorpay = b.payment_mode === 'razorpay';
 
+      let cardStyle = 'border-color: #e2e8f0; background: #ffffff;';
+      if (isCancelled) {
+        cardStyle = 'border-color: #fecdd3; background: #fff8f8; opacity: 0.95;';
+      } else if (isPaid) {
+        cardStyle = 'border-color: #86efac; background: #f0fdf4;';
+      }
+
       return `
-      <div class="service-deal-card" style="margin-bottom: 12px; border-color: ${isPaid ? '#86efac' : '#e2e8f0'}; background: ${isPaid ? '#f0fdf4' : '#ffffff'};">
+      <div class="service-deal-card" style="margin-bottom: 12px; ${cardStyle}">
         <div class="deal-top">
           <div>
-            <strong>#${b.order_number}</strong>
+            <strong style="${isCancelled ? 'text-decoration: line-through; color: #64748b;' : ''}">#${b.order_number}</strong>
             <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${b.pickup_date} (${b.pickup_slot})</div>
           </div>
           <div style="display: flex; gap: 6px; align-items: center;">
-            ${isPaid
-              ? `<span style="font-size: 11.5px; font-weight: 800; color: #15803d; background: #dcfce7; border: 1.5px solid #4ade80; padding: 3px 9px; border-radius: 6px; display: inline-flex; align-items: center; gap: 3px;">
-                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                   PAID
+            ${isCancelled
+              ? `<span style="font-size: 11px; font-weight: 700; color: #e11d48; background: #ffe4e6; border: 1px solid #fecdd3; padding: 3px 8px; border-radius: 6px;">
+                   CANCELLED
                  </span>`
-              : `<span style="font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 3px 7px; border-radius: 6px;">
-                   PENDING
-                 </span>`
+              : (isPaid
+                  ? `<span style="font-size: 11.5px; font-weight: 800; color: #15803d; background: #dcfce7; border: 1.5px solid #4ade80; padding: 3px 9px; border-radius: 6px; display: inline-flex; align-items: center; gap: 3px;">
+                       <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                       PAID
+                     </span>`
+                  : `<span style="font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 3px 7px; border-radius: 6px;">
+                       PENDING
+                     </span>`
+                )
             }
+            ${!isCancelled ? `
             <span style="font-size: 11px; font-weight: 700; color: #1e3a8a; background: #eff6ff; padding: 3px 8px; border-radius: 6px;">
               ${(b.status || 'PENDING').toUpperCase()}
-            </span>
+            </span>` : ''}
           </div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px;">
-          <span style="font-size: 15px; font-weight: 700; color: #0f172a;">₹${b.total_amount}</span>
-          <span style="font-size: 12px; color: #2563eb; font-weight: 600;">${b.service_title || 'Solar Wash'}</span>
+          <span style="font-size: 15px; font-weight: 700; color: ${isCancelled ? '#94a3b8' : '#0f172a'};">₹${b.total_amount}</span>
+          <span style="font-size: 12px; color: ${isCancelled ? '#94a3b8' : '#2563eb'}; font-weight: 600;">${b.service_title || 'Solar Wash'}</span>
         </div>
         <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-          ${isPaid
-            ? `<span style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
-                 <span>💳</span> Paid Online (Razorpay)
+          ${isCancelled
+            ? `<span style="font-size: 11px; font-weight: 600; color: #e11d48; background: #ffe4e6; padding: 3px 9px; border-radius: 999px;">
+                 ❌ Order Cancelled
                </span>`
-            : (isRazorpay
-                ? `<span style="font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; padding: 3px 8px; border-radius: 999px;">
-                     💳 Razorpay (Awaiting Payment)
+            : (isPaid
+                ? `<span style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                     <span>💳</span> Paid Online (Razorpay)
                    </span>`
-                : `<span style="font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 3px 8px; border-radius: 999px;">
-                     💵 Pay After Service (Cash / QR)
-                   </span>`
+                : (isRazorpay
+                    ? `<span style="font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; padding: 3px 8px; border-radius: 999px;">
+                         💳 Razorpay (Awaiting Payment)
+                       </span>`
+                    : `<span style="font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 3px 8px; border-radius: 999px;">
+                         💵 Pay After Service (Cash / QR)
+                       </span>`
+                  )
               )
           }
           ${b.razorpay_payment_id ? `<span style="font-size: 10px; color: #15803d; font-family: monospace; font-weight: 600;">Txn: ${b.razorpay_payment_id}</span>` : ''}
         </div>
-        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed ${isPaid ? '#bbf7d0' : '#e2e8f0'}; font-size: 11px; color: #475569; display: flex; flex-direction: column; gap: 4px;">
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed ${isCancelled ? '#fecdd3' : (isPaid ? '#bbf7d0' : '#e2e8f0')}; font-size: 11px; color: #475569; display: flex; flex-direction: column; gap: 4px;">
           <div><strong>📍 Address:</strong> ${b.pickup_address || 'Rooftop address provided'}</div>
           ${b.customer_phone ? `<div><strong>📞 Phone:</strong> <a href="tel:${b.customer_phone}" style="color: inherit;">${b.customer_phone}</a></div>` : ''}
           ${b.latitude && b.longitude ? `
@@ -2261,12 +2282,43 @@ function filterBookingsList(filter) {
               </a>
             </div>
           ` : ''}
+          ${b.status === 'pending' ? `
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end;">
+              <button type="button" class="btn-cancel-order-pill" onclick="cancelCustomerBooking('${b.id}', '${b.order_number}')">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="15" y1="9" x2="9" y2="15"></line>
+                  <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                Cancel Booking
+              </button>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;
     }).join('');
   }
 }
+
+// Customer cancel booking action
+async function cancelCustomerBooking(id, orderNumber) {
+  const confirmed = confirm(`Are you sure you want to cancel solar cleaning booking #${orderNumber}?`);
+  if (!confirmed) return;
+
+  try {
+    showToast('Cancelling booking...');
+    await customerApiFetch(`${API_BASE}/orders/${id}/cancel`, {
+      method: 'PUT'
+    });
+    showToast(`✓ Booking #${orderNumber} has been cancelled.`);
+    await loadCustomerBookings();
+  } catch (err) {
+    showToast(`Error: ${err.message}`);
+  }
+}
+
+window.cancelCustomerBooking = cancelCustomerBooking;
 
 function showToast(msg) {
   const toast = document.getElementById('toast');
