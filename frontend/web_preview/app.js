@@ -1118,8 +1118,11 @@ function setupEventListeners() {
                   bookingModal.classList.add('hidden');
                   showOrderSuccessPopup(createdOrder);
                 } catch (vErr) {
+                  try {
+                    await customerApiFetch(`${API_BASE}/orders/${createdOrder.id}/cancel`, { method: 'PUT' });
+                  } catch (_) {}
                   bookingModal.classList.add('hidden');
-                  showToast(`Booking #${createdOrder.order_number} saved.`);
+                  showToast(`Payment verification error. Booking #${createdOrder.order_number} cancelled.`);
                   showScreen('tab-bookings');
                   await loadCustomerBookings();
                 }
@@ -1127,7 +1130,10 @@ function setupEventListeners() {
               modal: {
                 ondismiss: async function () {
                   bookingModal.classList.add('hidden');
-                  showToast(`Payment cancelled. Booking #${createdOrder.order_number} saved.`);
+                  try {
+                    await customerApiFetch(`${API_BASE}/orders/${createdOrder.id}/cancel`, { method: 'PUT' });
+                  } catch (_) {}
+                  showToast(`⚠️ Payment page exited. Booking #${createdOrder.order_number} automatically cancelled.`);
                   showScreen('tab-bookings');
                   await loadCustomerBookings();
                 }
@@ -1135,8 +1141,14 @@ function setupEventListeners() {
             };
 
             const rzpInstance = new Razorpay(rzpOptions);
-            rzpInstance.on('payment.failed', function (resp) {
-              showToast(`Payment failed: ${resp.error.description || 'Try again'}`);
+            rzpInstance.on('payment.failed', async function (resp) {
+              bookingModal.classList.add('hidden');
+              try {
+                await customerApiFetch(`${API_BASE}/orders/${createdOrder.id}/cancel`, { method: 'PUT' });
+              } catch (_) {}
+              showToast(`❌ Payment failed: ${resp.error?.description || 'Declined'}. Booking #${createdOrder.order_number} cancelled.`);
+              showScreen('tab-bookings');
+              await loadCustomerBookings();
             });
             rzpInstance.open();
           } else {
@@ -1147,7 +1159,7 @@ function setupEventListeners() {
               `Total Payable: ₹${createdOrder.total_amount}\n` +
               `Pay via: UPI (GPay / PhonePe) / Cards\n\n` +
               `Click [OK] to complete Online Payment.\n` +
-              `Click [Cancel] to pay after service.`
+              `Click [Cancel] to exit and cancel payment.`
             );
 
             if (confirmPay) {
@@ -1170,7 +1182,12 @@ function setupEventListeners() {
               showOrderSuccessPopup(createdOrder);
             } else {
               bookingModal.classList.add('hidden');
-              showOrderSuccessPopup(createdOrder);
+              try {
+                await customerApiFetch(`${API_BASE}/orders/${createdOrder.id}/cancel`, { method: 'PUT' });
+              } catch (_) {}
+              showToast(`⚠️ Payment cancelled. Booking #${createdOrder.order_number} automatically cancelled.`);
+              showScreen('tab-bookings');
+              await loadCustomerBookings();
             }
           }
         }

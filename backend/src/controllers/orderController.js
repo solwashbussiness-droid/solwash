@@ -354,8 +354,8 @@ exports.cancelOrder = async (req, res) => {
        FROM orders o
        LEFT JOIN services s ON o.service_id = s.id
        LEFT JOIN users u ON o.user_id = u.id
-       WHERE o.id = ? AND o.user_id = ?`,
-      [id, userId]
+       WHERE (o.id = ? OR o.order_number = ?) AND o.user_id = ?`,
+      [id, id, userId]
     );
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
@@ -368,7 +368,7 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    await db.runAsync('UPDATE orders SET status = "cancelled", updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+    await db.runAsync('UPDATE orders SET status = "cancelled", payment_status = "cancelled", updated_at = CURRENT_TIMESTAMP WHERE id = ?', [order.id]);
 
     order.status = 'cancelled';
     db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
