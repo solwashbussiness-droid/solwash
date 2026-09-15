@@ -14,6 +14,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.webkit.WebViewAssetLoader;
@@ -27,6 +32,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Request runtime location permission at app launch
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                }, 1001);
+            }
+        }
 
         android.widget.RelativeLayout root = new android.widget.RelativeLayout(this);
         root.setLayoutParams(new android.view.ViewGroup.LayoutParams(
@@ -182,6 +197,20 @@ public class MainActivity extends AppCompatActivity {
                                 "window.handleDeepLinkAuth('" + safeToken + "', '" + safeName + "', '" + safeEmail + "'); " +
                                 "}";
                         webView.evaluateJavascript(js, null);
+                    });
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                if (webView != null) {
+                    webView.post(() -> {
+                        webView.evaluateJavascript("if (typeof window.onAndroidLocationPermissionGranted === 'function') { window.onAndroidLocationPermissionGranted(); }", null);
                     });
                 }
             }

@@ -429,11 +429,15 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('tab-home');
     verifyCustomer();
     fetchNotifications();
+    setTimeout(checkAndPromptStartupLocation, 500);
   } else {
     // Show OTP Login Screen behind splash screen
     showScreen('tab-login');
     updateCustomerUI();
     fetchNotifications();
+    if (document.documentElement.classList.contains('no-splash') || !splashContainer || splashContainer.style.display === 'none') {
+      setTimeout(checkAndPromptStartupLocation, 500);
+    }
   }
 });
 
@@ -490,6 +494,7 @@ function setupSplashOnboarding() {
     splashContainer.classList.add('splash-fade-out');
     setTimeout(() => {
       splashContainer.style.display = 'none';
+      setTimeout(checkAndPromptStartupLocation, 300);
     }, 400);
   }
 
@@ -1454,8 +1459,13 @@ function openBookingModal(title, price, id = 1, unit = '3 kWh') {
   // Trigger map & location detection on opening booking modal
   const existingLat = document.getElementById('bookLatitude') ? document.getElementById('bookLatitude').value : null;
   const existingLng = document.getElementById('bookLongitude') ? document.getElementById('bookLongitude').value : null;
+  const savedLat = localStorage.getItem('solwash_user_lat');
+  const savedLng = localStorage.getItem('solwash_user_lng');
+
   if (existingLat && existingLng) {
     initOrUpdateBookingMap(parseFloat(existingLat), parseFloat(existingLng), 19);
+  } else if (savedLat && savedLng) {
+    initOrUpdateBookingMap(parseFloat(savedLat), parseFloat(savedLng), 19);
   } else {
     initOrUpdateBookingMap(28.6139, 77.2090, 15);
   }
@@ -1744,6 +1754,172 @@ async function detectCurrentLocation(userInitiated = true) {
 
 // Expose globally for inline onclick
 window.detectCurrentLocation = detectCurrentLocation;
+
+// ========================================================
+// STARTUP LOCATION SERVICE LOGIC
+// ========================================================
+function checkAndPromptStartupLocation() {
+  const savedLat = localStorage.getItem('solwash_user_lat');
+  const savedLng = localStorage.getItem('solwash_user_lng');
+  const savedAddr = localStorage.getItem('solwash_user_address');
+
+  if (savedAddr) {
+    updateHeaderLocationDisplay(savedAddr);
+  } else if (savedLat && savedLng) {
+    reverseGeocodeArea(parseFloat(savedLat), parseFloat(savedLng));
+  }
+
+  // If already prompted or handled in this session, don't re-open popup
+  if (sessionStorage.getItem('solwash_location_prompt_seen')) {
+    return;
+  }
+
+  // Check if browser already granted location permission
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+      if (status.state === 'granted') {
+        requestAppStartupLocation(false, true);
+      } else if (status.state === 'denied') {
+        // User previously blocked in browser settings
+        sessionStorage.setItem('solwash_location_prompt_seen', 'true');
+      } else {
+        showStartupLocationModal();
+      }
+    }).catch(() => {
+      showStartupLocationModal();
+    });
+  } else {
+    showStartupLocationModal();
+  }
+}
+
+function showStartupLocationModal() {
+  const modal = document.getElementById('startupLocationModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+function dismissStartupLocationModal() {
+  sessionStorage.setItem('solwash_location_prompt_seen', 'true');
+  const modal = document.getElementById('startupLocationModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+async function requestAppStartupLocation(isManual = false, silent = false) {
+  const btn = document.getElementById('btnAllowStartupLocation');
+  const btnText = document.getElementById('btnAllowLocationText');
+
+  if (!navigator.geolocation) {
+    if (!silent) showToast('Geolocation is not supported by your device.');
+    dismissStartupLocationModal();
+    return;
+  }
+
+  if (btn && !silent) {
+    btn.disabled = true;
+    if (btnText) btnText.textContent = 'Locating device...';
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const validLat = parseFloat(Number(lat).toFixed(6));
+      const validLng = parseFloat(Number(lng).toFixed(6));
+
+      localStorage.setItem('solwash_user_lat', validLat);
+      localStorage.setItem('solwash_user_lng', validLng);
+      sessionStorage.setItem('solwash_location_prompt_seen', 'true');
+
+      if (btn) {
+        btn.disabled = false;
+        if (btnText) btnText.textContent = 'Turn On Location';
+      }
+      dismissStartupLocationModal();
+
+      // Reverse geocode to get human-readable area name
+      const area = await reverseGeocodeArea(validLat, validLng);
+      if (!silent) {
+        showToast(`✓ Location enabled: ${area || 'GPS Acquired'}`);
+      }
+
+      // If map is active, pan to rooftop
+      if (typeof bookingMap !== 'undefined' && bookingMap) {
+        bookingMap.setView([validLat, validLng], 19, { animate: true });
+      }
+    },
+    async (error) => {
+      if (btn) {
+        btn.disabled = false;
+        if (btnText) btnText.textContent = 'Turn On Location';
+      }
+      sessionStorage.setItem('solwash_location_prompt_seen', 'true');
+      dismissStartupLocationModal();
+
+      if (error.code === error.PERMISSION_DENIED) {
+        if (!silent) showToast('Location permission denied. You can set address manually.');
+      } else {
+        // Fallback to IP geolocation to at least center map near user's city
+        try {
+          const geoRes = await fetch('https://ipwho.is/').then(r => r.json()).catch(() => null);
+          if (geoRes && geoRes.success && geoRes.latitude && geoRes.longitude) {
+            localStorage.setItem('solwash_user_lat', geoRes.latitude);
+            localStorage.setItem('solwash_user_lng', geoRes.longitude);
+            const city = geoRes.city || geoRes.region || 'India';
+            updateHeaderLocationDisplay(city);
+          }
+        } catch (_) {}
+        if (!silent) showToast('Could not fetch exact GPS. Set address manually.');
+      }
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 60000
+    }
+  );
+}
+
+async function reverseGeocodeArea(lat, lng) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+      headers: { 'Accept-Language': 'en' }
+    });
+    if (!res.ok) throw new Error('Geocode failed');
+    const data = await res.json();
+    if (data && data.address) {
+      const a = data.address;
+      const primary = a.suburb || a.neighbourhood || a.residential || a.road || a.city_district || a.village || '';
+      const city = a.city || a.town || a.county || a.state_district || '';
+      let shortArea = primary ? (city ? `${primary}, ${city}` : primary) : (city || 'Current Location');
+      updateHeaderLocationDisplay(shortArea);
+      localStorage.setItem('solwash_user_address', shortArea);
+      return shortArea;
+    }
+  } catch (_) {}
+  const fallback = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+  updateHeaderLocationDisplay(fallback);
+  return fallback;
+}
+
+function updateHeaderLocationDisplay(text) {
+  const lbl = document.getElementById('headerLocationLabel');
+  if (lbl) {
+    lbl.textContent = text + ' ▾';
+  }
+}
+
+// Global exposures
+window.checkAndPromptStartupLocation = checkAndPromptStartupLocation;
+window.requestAppStartupLocation = requestAppStartupLocation;
+window.dismissStartupLocationModal = dismissStartupLocationModal;
+window.onAndroidLocationPermissionGranted = function() {
+  requestAppStartupLocation(false, false);
+};
+
 
 async function loadPublicServices() {
   const container = document.getElementById('servicesListContainer');

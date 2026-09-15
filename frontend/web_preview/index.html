@@ -136,7 +136,20 @@
     <div id="tab-home" class="screen-tab">
           <!-- Header Bar -->
           <div class="app-header">
-            <h1 class="user-greeting">Hello, <span id="headerUserName">User</span></h1>
+            <div>
+              <div class="header-location-bar" id="headerLocationBar" onclick="requestAppStartupLocation(true)" title="Tap to update location">
+                <div class="loc-icon-bubble">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                </div>
+                <div class="loc-text-wrap">
+                  <div class="loc-label-small">Rooftop Location</div>
+                  <div class="loc-address-line" id="headerLocationLabel">Detect Location ▾</div>
+                </div>
+              </div>
+              <h1 class="user-greeting">Hello, <span id="headerUserName">User</span></h1>
+            </div>
             <div class="header-actions">
               <button class="icon-btn" id="notifBtn" aria-label="Notifications" title="Notifications">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
@@ -662,6 +675,56 @@
       <div class="notif-list-container" id="notifListContainer">
         <!-- Dynamic notifications will render here -->
       </div>
+    </div>
+  </div>
+
+  <!-- STARTUP LOCATION PERMISSION PROMPT MODAL -->
+  <div id="startupLocationModal" class="location-prompt-modal-backdrop hidden">
+    <div class="location-prompt-card">
+      <div class="loc-card-header">
+        <div class="location-pulse-wrap">
+          <div class="location-pulse-ring"></div>
+          <div class="location-pulse-ring delay"></div>
+          <div class="location-pulse-icon">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="#f59e0b">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="location-prompt-title">Device Location On Karein</h2>
+      <p class="location-prompt-desc">
+        SolWash needs your rooftop location to assign nearby certified solar technicians and pinpoint your panel coordinates accurately.
+      </p>
+
+      <div class="location-benefit-list">
+        <div class="benefit-item">
+          <div class="benefit-icon">📍</div>
+          <div class="benefit-text">
+            <b>Exact Solar Rooftop GPS</b>
+            <span>Pins cleaning team directly to your rooftop</span>
+          </div>
+        </div>
+        <div class="benefit-item">
+          <div class="benefit-icon">⚡</div>
+          <div class="benefit-text">
+            <b>Instant Nearby Technicians</b>
+            <span>Faster slot availability in your area</span>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="btnAllowStartupLocation" class="btn-location-primary" onclick="requestAppStartupLocation(false)">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+        </svg>
+        <span id="btnAllowLocationText">Turn On Location</span>
+      </button>
+
+      <button type="button" id="btnDismissStartupLocation" class="btn-location-secondary" onclick="dismissStartupLocationModal()">
+        Enter Address Manually
+      </button>
     </div>
   </div>
 
