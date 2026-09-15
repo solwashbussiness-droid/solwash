@@ -29,14 +29,24 @@ function getTransporter() {
   return nodemailer.createTransport(transportOptions);
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function generateInvoiceHtml(order, items = [], statusType = 'initiated') {
-  const orderNum = order.order_number || `#${order.id}`;
-  const customerName = order.customer_name || 'Valued Customer';
-  const customerPhone = order.customer_phone || 'N/A';
-  const customerAddress = order.pickup_address || 'N/A';
+  const orderNum = escapeHtml(order.order_number || `#${order.id}`);
+  const customerName = escapeHtml(order.customer_name || 'Valued Customer');
+  const customerPhone = escapeHtml(order.customer_phone || 'N/A');
+  const customerAddress = escapeHtml(order.pickup_address || 'N/A');
   const totalAmount = Number(order.total_amount || 0).toLocaleString('en-IN');
-  const paymentMode = (order.payment_mode || 'cash_on_delivery').toUpperCase().replace(/_/g, ' ');
-  const pickupSlot = `${order.pickup_date || ''} (${order.pickup_slot || ''})`.trim();
+  const paymentMode = escapeHtml((order.payment_mode || 'cash_on_delivery').toUpperCase().replace(/_/g, ' '));
+  const pickupSlot = escapeHtml(`${order.pickup_date || ''} (${order.pickup_slot || ''})`.trim());
 
   let statusBadge = '';
   let statusMessage = '';
@@ -66,8 +76,8 @@ function generateInvoiceHtml(order, items = [], statusType = 'initiated') {
   if (items && items.length > 0) {
     itemsRows = items.map((item, idx) => `
       <tr style="border-bottom: 1px solid #f1f5f9;">
-        <td style="padding: 12px; font-size: 14px; color: #1e293b;">${idx + 1}. ${item.item_name}</td>
-        <td style="padding: 12px; font-size: 14px; color: #64748b; text-align: center;">${item.quantity || 1}</td>
+        <td style="padding: 12px; font-size: 14px; color: #1e293b;">${idx + 1}. ${escapeHtml(item.item_name)}</td>
+        <td style="padding: 12px; font-size: 14px; color: #64748b; text-align: center;">${parseInt(item.quantity, 10) || 1}</td>
         <td style="padding: 12px; font-size: 14px; color: #64748b; text-align: right;">₹${Number(item.unit_price || 0).toLocaleString('en-IN')}</td>
         <td style="padding: 12px; font-size: 14px; font-weight:600; color: #0f172a; text-align: right;">₹${Number(item.total_price || (item.unit_price * (item.quantity || 1))).toLocaleString('en-IN')}</td>
       </tr>
@@ -75,7 +85,7 @@ function generateInvoiceHtml(order, items = [], statusType = 'initiated') {
   } else {
     itemsRows = `
       <tr style="border-bottom: 1px solid #f1f5f9;">
-        <td style="padding: 12px; font-size: 14px; color: #1e293b;">${order.service_title || 'Solar Care & Cleaning Service'}</td>
+        <td style="padding: 12px; font-size: 14px; color: #1e293b;">${escapeHtml(order.service_title || 'Solar Care & Cleaning Service')}</td>
         <td style="padding: 12px; font-size: 14px; color: #64748b; text-align: center;">1</td>
         <td style="padding: 12px; font-size: 14px; color: #64748b; text-align: right;">₹${totalAmount}</td>
         <td style="padding: 12px; font-size: 14px; font-weight:600; color: #0f172a; text-align: right;">₹${totalAmount}</td>

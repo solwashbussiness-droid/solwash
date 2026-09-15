@@ -15,15 +15,38 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const path = require('path');
 const fs = require('fs');
 
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
 const app = express();
 
 // Trust proxy for reverse proxy setups (Nginx, HTTPS, Cloudflare)
 app.enable('trust proxy');
+app.disable('x-powered-by');
+
+// Security Headers (Helmet) - configured to allow Dicebear and cdn resources
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled on API to allow embedded preview/admin resources
+  crossOriginEmbedderPolicy: false
+}));
+
+// Global Rate Limiting: 300 requests per 1 minute per IP
+const globalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests from this IP. Please try again in a minute.'
+  }
+});
+app.use('/api/', globalLimiter);
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 if (env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }

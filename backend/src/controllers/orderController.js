@@ -48,23 +48,24 @@ exports.createOrder = async (req, res) => {
     }
 
     const orderNumber = generateOrderNumber();
+    let validServiceId = null;
     let calculatedTotal = 0.0;
 
-    if (Array.isArray(items) && items.length > 0) {
-      calculatedTotal = items.reduce((acc, curr) => {
-        return acc + (Number(curr.quantity || 1) * Number(curr.unit_price || 0));
-      }, 0);
-    }
-
-    let validServiceId = null;
     if (service_id) {
-      const service = await db.getAsync('SELECT id, base_price FROM services WHERE id = ?', [service_id]);
+      const service = await db.getAsync('SELECT id, base_price, title FROM services WHERE id = ?', [service_id]);
       if (service) {
         validServiceId = service.id;
-        if (!items || items.length === 0) {
-          calculatedTotal = service.base_price;
-        }
+        calculatedTotal = Number(service.base_price) || 0;
       }
+    }
+
+    // If items passed without service_id, ensure positive total
+    if (!validServiceId && Array.isArray(items) && items.length > 0) {
+      calculatedTotal = items.reduce((acc, curr) => {
+        const qty = Math.max(1, parseInt(curr.quantity, 10) || 1);
+        const price = Math.max(0, parseFloat(curr.unit_price) || 0);
+        return acc + (qty * price);
+      }, 0);
     }
 
     const orderResult = await db.runAsync(

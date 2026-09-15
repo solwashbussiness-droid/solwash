@@ -116,6 +116,20 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
+    // Verify order ownership
+    const existingOrder = await db.getAsync(
+      'SELECT id, user_id, status, payment_status FROM orders WHERE id = ? OR order_number = ?',
+      [order_id, order_id]
+    );
+
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    if (req.user && req.user.role === 'customer' && existingOrder.user_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied: You cannot verify payment for another user\'s booking.' });
+    }
+
     // Update SolWash order record
     await db.runAsync(
       `UPDATE orders
@@ -161,6 +175,26 @@ exports.verifyPayment = async (req, res) => {
 // 3. Razorpay Server Webhook (Automatic background payment capture sync)
 exports.handleWebhook = async (req, res) => {
   try {
+    const webhookSecret = env.RAZORPAY_WEBHOOK_SECRET || env.RAZORPAY_KEY_SECRET;
+    const rzpSignature = req.headers['x-razorpay-signature'];
+
+    // If secret configured, verify cryptographic signature
+    if (webhookSecret && !webhookSecret.includes('test_secret_solwash123456')) {
+      if (!rzpSignature) {
+        return res.status(400).json({ success: false, message: 'Missing webhook signature header' });
+      }
+
+      const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+      if (expectedSignature !== rzpSignature) {
+        console.warn('[Webhook] Rejected untrusted webhook with invalid signature');
+        return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+      }
+    }
+
     const event = req.body.event;
     const payload = req.body.payload;
 

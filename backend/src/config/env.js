@@ -16,6 +16,7 @@ module.exports = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
   RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || 'rzp_test_solwash123456',
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || 'test_secret_solwash123456',
+  RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || '',
   SMTP: {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '465', 10),
