@@ -1133,7 +1133,12 @@ function setupEventListeners() {
                   try {
                     await customerApiFetch(`${API_BASE}/orders/${createdOrder.id}/cancel`, { method: 'PUT' });
                   } catch (_) {}
-                  showToast(`⚠️ Payment page exited. Booking #${createdOrder.order_number} automatically cancelled.`);
+                  showToast(`⚠️ Payment page exited. Booking #${createdOrder.order_number} cancelled.`);
+                  const cancelledPill = document.querySelector('.filter-pill[data-filter="cancelled"]');
+                  if (cancelledPill) {
+                    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+                    cancelledPill.classList.add('active');
+                  }
                   showScreen('tab-bookings');
                   await loadCustomerBookings();
                 }
@@ -1147,6 +1152,11 @@ function setupEventListeners() {
                 await customerApiFetch(`${API_BASE}/orders/${createdOrder.id}/cancel`, { method: 'PUT' });
               } catch (_) {}
               showToast(`❌ Payment failed: ${resp.error?.description || 'Declined'}. Booking #${createdOrder.order_number} cancelled.`);
+              const cancelledPill = document.querySelector('.filter-pill[data-filter="cancelled"]');
+              if (cancelledPill) {
+                document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+                cancelledPill.classList.add('active');
+              }
               showScreen('tab-bookings');
               await loadCustomerBookings();
             });
@@ -2158,7 +2168,9 @@ async function loadCustomerBookings() {
 
     if (result.data && result.data.length > 0) {
       customerBookingsList = result.data;
-      filterBookingsList('all');
+      const currentActivePill = document.querySelector('.filter-pill.active');
+      const currentFilter = currentActivePill ? currentActivePill.getAttribute('data-filter') : 'all';
+      filterBookingsList(currentFilter);
     } else {
       customerBookingsList = [];
       if (emptyView) emptyView.style.display = 'flex';

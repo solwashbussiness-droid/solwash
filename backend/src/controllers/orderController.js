@@ -368,10 +368,11 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    await db.runAsync('UPDATE orders SET status = "cancelled", payment_status = "cancelled", updated_at = CURRENT_TIMESTAMP WHERE id = ?', [order.id]);
+    await db.runAsync('UPDATE orders SET status = "cancelled", payment_status = "failed", updated_at = CURRENT_TIMESTAMP WHERE id = ?', [order.id]);
 
     order.status = 'cancelled';
-    db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]).then(items => {
+    order.payment_status = 'failed';
+    db.allAsync('SELECT * FROM order_items WHERE order_id = ?', [order.id]).then(items => {
       sendOrderInvoiceEmail(order, 'failed', items).catch(e => console.error('[Email] Cancel error:', e.message));
     });
 
