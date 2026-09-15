@@ -1059,6 +1059,44 @@ function setupEventListeners() {
                 contact: formattedPhone
               },
               theme: { color: '#111d38' },
+              method: {
+                upi: true,
+                card: true,
+                netbanking: true,
+                wallet: true
+              },
+              config: {
+                display: {
+                  blocks: {
+                    upi: {
+                      name: 'Pay via UPI (GPay, PhonePe, Paytm, QR)',
+                      instruments: [
+                        {
+                          method: 'upi'
+                        }
+                      ]
+                    },
+                    other: {
+                      name: 'Cards / Net Banking / Wallets',
+                      instruments: [
+                        {
+                          method: 'card'
+                        },
+                        {
+                          method: 'netbanking'
+                        },
+                        {
+                          method: 'wallet'
+                        }
+                      ]
+                    }
+                  },
+                  sequence: ['block.upi', 'block.other'],
+                  preferences: {
+                    show_default_blocks: true
+                  }
+                }
+              },
               handler: async function (response) {
                 showToast('Verifying payment with bank...');
                 try {

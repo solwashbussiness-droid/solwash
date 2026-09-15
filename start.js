@@ -61,7 +61,7 @@ function cleanExit() {
 
 process.on('SIGINT', cleanExit);
 process.on('SIGTERM', cleanExit);
-process.on('SIGHUP', cleanExit);
+process.on('SIGHUP', () => {});
 
 console.log('=============================================');
 console.log('🚀 Starting SolWash Services...');
