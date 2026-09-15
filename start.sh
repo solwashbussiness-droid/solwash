@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PATH="/home/linux/.local/bin:/home/linux/.local/node/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/node/bin:$PATH"
 
 if [ "$1" = "-d" ] || [ "$1" = "--daemon" ]; then
     echo "Starting SolWash services in background..."

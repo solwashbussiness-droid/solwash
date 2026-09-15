@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export PATH="/home/linux/.local/bin:/home/linux/.local/node/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/node/bin:$PATH"
 
 echo "Stopping SolWash services..."
 
