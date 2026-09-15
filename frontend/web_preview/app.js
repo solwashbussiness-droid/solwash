@@ -429,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('tab-home');
     verifyCustomer();
     fetchNotifications();
+    startBookingsAutoRefresh();
     setTimeout(checkAndPromptStartupLocation, 500);
   } else {
     // Show OTP Login Screen behind splash screen
@@ -774,6 +775,7 @@ function setupEventListeners() {
         currentCustomer = null;
         localStorage.removeItem('solwash_customer_token');
         localStorage.removeItem('solwash_customer_user');
+        stopBookingsAutoRefresh();
         updateCustomerUI();
         resetOtpForm();
         showToast('Logged out successfully');
@@ -2151,9 +2153,39 @@ function updateCustomerUI() {
 }
 
 let customerBookingsList = [];
+let customerBookingsPollTimer = null;
 
-// Load My Bookings
-async function loadCustomerBookings() {
+// Start auto-refresh polling when user is logged in
+function startBookingsAutoRefresh() {
+  if (customerBookingsPollTimer) {
+    clearInterval(customerBookingsPollTimer);
+  }
+  customerBookingsPollTimer = setInterval(() => {
+    // Only fetch silently if user is logged in and document is visible
+    if (authToken && !document.hidden) {
+      loadCustomerBookings(true);
+    }
+  }, 4000);
+}
+
+// Stop polling when logged out
+function stopBookingsAutoRefresh() {
+  if (customerBookingsPollTimer) {
+    clearInterval(customerBookingsPollTimer);
+    customerBookingsPollTimer = null;
+  }
+}
+
+// Refresh immediately when user returns to app tab / window
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && authToken) {
+    loadCustomerBookings(true);
+    fetchNotifications();
+  }
+});
+
+// Load My Bookings (silent = true for background polls)
+async function loadCustomerBookings(silent = false) {
   const emptyView = document.getElementById('emptyBookingsView');
   const activeList = document.getElementById('activeBookingsList');
 
@@ -2167,28 +2199,37 @@ async function loadCustomerBookings() {
     const result = await customerApiFetch(`${API_BASE}/orders/my-orders`, { method: 'GET' });
 
     if (result.data && result.data.length > 0) {
+      // Check if status changed compared to existing list
+      const prevDataStr = JSON.stringify(customerBookingsList);
       customerBookingsList = result.data;
-      const currentActivePill = document.querySelector('.filter-pill.active');
-      const currentFilter = currentActivePill ? currentActivePill.getAttribute('data-filter') : 'all';
-      filterBookingsList(currentFilter);
+      const nextDataStr = JSON.stringify(result.data);
+
+      // Re-render if silent poll detected changes or if not silent
+      if (!silent || prevDataStr !== nextDataStr) {
+        const currentActivePill = document.querySelector('.filter-pill.active');
+        const currentFilter = currentActivePill ? currentActivePill.getAttribute('data-filter') : 'all';
+        filterBookingsList(currentFilter);
+      }
     } else {
       customerBookingsList = [];
       if (emptyView) emptyView.style.display = 'flex';
       if (activeList) activeList.style.display = 'none';
     }
   } catch (err) {
-    console.error('Failed to load bookings:', err);
-    if (!err.message.includes('Session expired')) {
-      if (activeList && emptyView) {
-        emptyView.style.display = 'none';
-        activeList.style.display = 'block';
-        activeList.innerHTML = `
-          <div style="text-align: center; padding: 32px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; color: #b91c1c; margin-top: 12px;">
-            <div style="font-size: 15px; font-weight: 700; color: #991b1b;">⚠️ Failed to Fetch Bookings</div>
-            <div style="font-size: 12px; margin-top: 5px;">${err.message}</div>
-            <button type="button" onclick="loadCustomerBookings()" style="margin-top: 12px; background: #1e3a8a; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">🔄 Tap to Retry</button>
-          </div>
-        `;
+    if (!silent) {
+      console.error('Failed to load bookings:', err);
+      if (!err.message.includes('Session expired')) {
+        if (activeList && emptyView) {
+          emptyView.style.display = 'none';
+          activeList.style.display = 'block';
+          activeList.innerHTML = `
+            <div style="text-align: center; padding: 32px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; color: #b91c1c; margin-top: 12px;">
+              <div style="font-size: 15px; font-weight: 700; color: #991b1b;">⚠️ Failed to Fetch Bookings</div>
+              <div style="font-size: 12px; margin-top: 5px;">${err.message}</div>
+              <button type="button" onclick="loadCustomerBookings()" style="margin-top: 12px; background: #1e3a8a; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">🔄 Tap to Retry</button>
+            </div>
+          `;
+        }
       }
     }
   }
@@ -2205,6 +2246,8 @@ function filterBookingsList(filter) {
     filtered = filtered.filter(b => ['confirmed', 'picked_up'].includes(b.status));
   } else if (filter === 'in_progress') {
     filtered = filtered.filter(b => ['in_process', 'ready', 'out_for_delivery'].includes(b.status));
+  } else if (filter === 'completed') {
+    filtered = filtered.filter(b => ['delivered', 'completed'].includes(b.status));
   } else if (filter === 'cancelled') {
     filtered = filtered.filter(b => b.status === 'cancelled');
   }
@@ -2217,15 +2260,32 @@ function filterBookingsList(filter) {
     activeList.style.display = 'block';
     activeList.innerHTML = filtered.map(b => {
       const isCancelled = b.status === 'cancelled';
+      const isCompleted = ['delivered', 'completed'].includes(b.status);
       const isPaid = !isCancelled && String(b.payment_status || '').toLowerCase() === 'paid';
       const isRazorpay = b.payment_mode === 'razorpay';
 
       let cardStyle = 'border-color: #e2e8f0; background: #ffffff;';
       if (isCancelled) {
         cardStyle = 'border-color: #fecdd3; background: #fff8f8; opacity: 0.95;';
+      } else if (isCompleted) {
+        cardStyle = 'border-color: #bbf7d0; background: #f0fdf4;';
       } else if (isPaid) {
         cardStyle = 'border-color: #86efac; background: #f0fdf4;';
       }
+
+      // Nice readable status text
+      const statusLabels = {
+        pending: 'PENDING',
+        confirmed: 'ACCEPTED / CONFIRMED',
+        picked_up: 'TECHNICIAN DISPATCHED',
+        in_process: 'CLEANING IN PROGRESS',
+        ready: 'WASH COMPLETED',
+        out_for_delivery: 'FINAL INSPECTION',
+        delivered: 'COMPLETED',
+        completed: 'COMPLETED',
+        cancelled: 'CANCELLED'
+      };
+      const displayStatus = statusLabels[b.status] || (b.status || 'PENDING').toUpperCase();
 
       return `
       <div class="service-deal-card" style="margin-bottom: 12px; ${cardStyle}">
@@ -2250,8 +2310,8 @@ function filterBookingsList(filter) {
                 )
             }
             ${!isCancelled ? `
-            <span style="font-size: 11px; font-weight: 700; color: #1e3a8a; background: #eff6ff; padding: 3px 8px; border-radius: 6px;">
-              ${(b.status || 'PENDING').toUpperCase()}
+            <span style="font-size: 11px; font-weight: 700; color: ${isCompleted ? '#15803d' : '#1e3a8a'}; background: ${isCompleted ? '#dcfce7' : '#eff6ff'}; padding: 3px 8px; border-radius: 6px;">
+              ${displayStatus}
             </span>` : ''}
           </div>
         </div>
@@ -2264,17 +2324,22 @@ function filterBookingsList(filter) {
             ? `<span style="font-size: 11px; font-weight: 600; color: #e11d48; background: #ffe4e6; padding: 3px 9px; border-radius: 999px;">
                  ❌ Order Cancelled
                </span>`
-            : (isPaid
-                ? `<span style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
-                     <span>💳</span> Paid Online (Razorpay)
+            : (isCompleted
+                ? `<span style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                     <span>✅</span> Solar Wash Completed & Verified
                    </span>`
-                : (isRazorpay
-                    ? `<span style="font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; padding: 3px 8px; border-radius: 999px;">
-                         💳 Razorpay (Awaiting Payment)
+                : (isPaid
+                    ? `<span style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                         <span>💳</span> Paid Online (Razorpay)
                        </span>`
-                    : `<span style="font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 3px 8px; border-radius: 999px;">
-                         💵 Pay After Service (Cash / QR)
-                       </span>`
+                    : (isRazorpay
+                        ? `<span style="font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; padding: 3px 8px; border-radius: 999px;">
+                             💳 Razorpay (Awaiting Payment)
+                           </span>`
+                        : `<span style="font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 3px 8px; border-radius: 999px;">
+                             💵 Pay After Service (Cash / QR)
+                           </span>`
+                      )
                   )
               )
           }
@@ -2440,6 +2505,9 @@ function setupOtpAuthentication() {
 
         // Reset OTP forms so it starts fresh on any next logout/visit
         resetOtpForm();
+
+        // Start bookings auto-polling
+        startBookingsAutoRefresh();
 
         // Redirect to Home Screen
         showScreen('tab-home');
